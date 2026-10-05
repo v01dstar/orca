@@ -1,11 +1,12 @@
 import { existsSync, mkdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { getAppFlavor } from '../../shared/app-flavor'
 
 export const LEGACY_WORKSPACE_ID = 'legacy'
 
 function getOrcaDir(): string {
-  return join(homedir(), '.orca')
+  return join(homedir(), getAppFlavor().homeStateDirName)
 }
 
 function getLegacyTokenPath(): string {

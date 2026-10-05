@@ -4,6 +4,7 @@ import {
   HangarApiError,
   type HangarApiClient
 } from '../../shared/hangar/hangar-api-client'
+import { createHangarTokenSource } from '../../shared/hangar/hangar-token-source'
 import { beginHangarSignIn } from './hangar-sign-in'
 import type { HangarAccountState, HangarSessionPersistence } from '../../shared/hangar/hangar-ipc'
 import {
@@ -12,9 +13,6 @@ import {
   saveHangarSession,
   type HangarSession
 } from './hangar-session-store'
-
-// Why: refresh a minute early so a request never leaves with a token that expires in flight.
-const REFRESH_SKEW_MS = 60_000
 
 export function normalizeHangarServerUrl(raw: string): string {
   const url = new URL(raw.trim())
@@ -29,7 +27,18 @@ export class HangarAccount {
   private session: HangarSession | null
   private persistence: HangarSessionPersistence = 'encrypted'
   private lastServerUrl: string | null
-  private refreshing: Promise<HangarSession> | null = null
+  private readonly accessToken = createHangarTokenSource({
+    current: () => this.session,
+    replace: (next) => {
+      if (next) {
+        this.setSession(next)
+      } else {
+        this.session = null
+        clearHangarSession(this.userDataPath)
+        this.emit()
+      }
+    }
+  })
   private readonly listeners = new Set<(state: HangarAccountState) => void>()
 
   constructor(private readonly userDataPath: string) {
@@ -89,45 +98,6 @@ export class HangarAccount {
       baseUrl: session.serverUrl,
       getAccessToken: (forceRefresh) => this.accessToken(forceRefresh)
     })
-  }
-
-  private async accessToken(forceRefresh: boolean): Promise<string> {
-    const session = this.session
-    if (!session) {
-      throw new HangarApiError(401, 'unauthenticated', 'Sign in to hangar first.')
-    }
-    const expiresAt = Date.parse(session.tokens.accessExpiresAt)
-    if (!forceRefresh && expiresAt - Date.now() > REFRESH_SKEW_MS) {
-      return session.tokens.accessToken
-    }
-    // Why: one refresh at a time; hangar rotates refresh tokens and treats reuse as theft.
-    this.refreshing ??= this.refresh(session).finally(() => {
-      this.refreshing = null
-    })
-    return (await this.refreshing).tokens.accessToken
-  }
-
-  private async refresh(session: HangarSession): Promise<HangarSession> {
-    try {
-      const tokens = await createHangarApiClient({ baseUrl: session.serverUrl }).refresh(
-        session.tokens.refreshToken
-      )
-      const next = { ...session, tokens }
-      // Why: a sign-out or new sign-in during the request wins; do not resurrect the old session.
-      if (this.session === session) {
-        this.setSession(next)
-      }
-      return next
-    } catch (error) {
-      if (error instanceof HangarApiError && (error.status === 401 || error.status === 403)) {
-        if (this.session === session) {
-          this.session = null
-          clearHangarSession(this.userDataPath)
-          this.emit()
-        }
-      }
-      throw error
-    }
   }
 
   private setSession(session: HangarSession): void {

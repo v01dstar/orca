@@ -4,6 +4,7 @@
 // homedir-derived path when no AppEnvironment is installed (unit tests).
 
 import { getAppEnvironment, hasAppEnvironment } from '../../shared/app-environment'
+import { getAppFlavor } from '../../shared/app-flavor'
 import { homedir, platform } from 'node:os'
 import { join } from 'node:path'
 
@@ -18,12 +19,12 @@ function getUserDataDir(): string {
   }
   const home = homedir()
   if (platform() === 'darwin') {
-    return join(home, 'Library', 'Application Support', 'Orca')
+    return join(home, 'Library', 'Application Support', getAppFlavor().appName)
   }
   if (platform() === 'win32') {
-    return join(process.env.APPDATA ?? home, 'Orca')
+    return join(process.env.APPDATA ?? home, getAppFlavor().appName)
   }
-  return join(home, '.config', 'Orca')
+  return join(home, '.config', getAppFlavor().appName)
 }
 
 export function getLogsDirectory(): string {

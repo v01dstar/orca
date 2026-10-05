@@ -81,7 +81,12 @@ const devChannelRepo = isHourlyChannel
     : isAdhocChannel
       ? 'orca-adhoc'
       : null
-const appId = 'com.stablyai.orca'
+// Fork: `ORCA_FLAVOR=hangar` packages a desktop app that installs beside the official Orca
+// (src/shared/app-flavor.ts holds the same names for the code).
+const isHangarFlavor = process.env.ORCA_FLAVOR === 'hangar'
+const appId = isHangarFlavor ? 'com.v01dstar.orca-hangar' : 'com.stablyai.orca'
+const productName = isHangarFlavor ? 'Orca Hangar' : 'Orca'
+const macCliLauncherName = isHangarFlavor ? 'orca-hangar' : 'orca'
 const featureWallResources = {
   from: 'resources/onboarding/feature-wall',
   to: 'onboarding/feature-wall'
@@ -182,14 +187,20 @@ const windowsRuntimeResources = existsSync(
 /** @type {import('electron-builder').Configuration} */
 module.exports = {
   appId,
-  productName: 'Orca',
-  protocols: [{ name: 'Orca', schemes: ['orca'] }],
+  productName,
+  protocols: [{ name: productName, schemes: [isHangarFlavor ? 'orca-hangar' : 'orca'] }],
   toolsets: { appimage: '1.0.3' },
-  ...(devChannelBuildVersion
-    ? { extraMetadata: { version: devChannelBuildVersion } }
-    : localBuildVersion
-      ? { extraMetadata: { version: localBuildVersion } }
-      : {}),
+  ...(devChannelBuildVersion || localBuildVersion || isHangarFlavor
+    ? {
+        extraMetadata: {
+          ...(devChannelBuildVersion || localBuildVersion
+            ? { version: devChannelBuildVersion || localBuildVersion }
+            : {}),
+          // Why: Electron derives the packaged userData dir from package.json `name`.
+          ...(isHangarFlavor ? { name: 'orca-hangar' } : {})
+        }
+      }
+    : {}),
   directories: {
     buildResources: 'resources/build'
   },
@@ -573,8 +584,8 @@ module.exports = {
       ...createPackagedRuntimeNodeModuleResources('darwin'),
       macSpeechNativeResource,
       {
-        from: 'resources/darwin/bin/orca',
-        to: 'bin/orca'
+        from: `resources/darwin/bin/${macCliLauncherName}`,
+        to: `bin/${macCliLauncherName}`
       },
       {
         from: 'node_modules/agent-browser/bin/agent-browser-darwin-${arch}',
@@ -710,16 +721,19 @@ module.exports = {
   // on Intel Macs. The beforeBuild hook performs Orca's targeted rebuild and
   // returns false so electron-builder does not rebuild optional cpu-features.
   npmRebuild: true,
-  publish: {
-    provider: 'github',
-    owner: 'stablyai',
-    repo: devChannelRepo ?? 'orca',
-    // Why draft on the main repo: `--publish always` otherwise creates a
-    // public GitHub release as soon as the first platform uploads, and
-    // /releases/latest serves a missing Windows exe. release-cut undrafts
-    // only after every required asset exists.
-    releaseType: devChannelRepo ? 'prerelease' : 'draft'
-  }
+  // Fork flavor: no update feed; the official one would replace this build with the official app.
+  publish: isHangarFlavor
+    ? null
+    : {
+        provider: 'github',
+        owner: 'stablyai',
+        repo: devChannelRepo ?? 'orca',
+        // Why draft on the main repo: `--publish always` otherwise creates a
+        // public GitHub release as soon as the first platform uploads, and
+        // /releases/latest serves a missing Windows exe. release-cut undrafts
+        // only after every required asset exists.
+        releaseType: devChannelRepo ? 'prerelease' : 'draft'
+      }
 }
 
 // Stamp the effective channel version where node-mode CLI code can read it.
@@ -736,7 +750,7 @@ function chmodUnixCliLaunchers(resourcesDir, electronPlatformName) {
   if (electronPlatformName === 'win32') {
     return
   }
-  for (const launcherName of ['orca', 'orca-ide']) {
+  for (const launcherName of ['orca', 'orca-ide', 'orca-hangar']) {
     const launcherPath = join(resourcesDir, 'bin', launcherName)
     if (!existsSync(launcherPath)) {
       continue
