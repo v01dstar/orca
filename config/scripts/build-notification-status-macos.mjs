@@ -28,7 +28,10 @@ if (process.platform !== 'darwin') {
 }
 
 const args = process.argv.slice(2)
-const bundleId = readArg('--bundle-id') ?? 'com.stablyai.orca'
+// Fork: the helper's embedded bundle id must match the app's (ORCA_FLAVOR=hangar builds).
+const bundleId =
+  readArg('--bundle-id') ??
+  (process.env.ORCA_FLAVOR === 'hangar' ? 'com.v01dstar.orca-hangar' : 'com.stablyai.orca')
 const outputPath = readArg('--output') ?? defaultOutputPath
 // Why: dev launches only need the host architecture; release builds ship a
 // universal binary matching the app's x64 + arm64 targets.

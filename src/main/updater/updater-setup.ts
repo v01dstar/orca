@@ -1,4 +1,5 @@
 import { app, powerMonitor } from 'electron'
+import { getAppFlavor } from '../../shared/app-flavor'
 import type { BrowserWindow } from 'electron'
 import { is } from '@electron-toolkit/utils'
 import type { ReleaseBuild, ReleaseChannel } from '../../shared/release-channel'
@@ -138,7 +139,8 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
     if (!app.isPackaged && !is.dev) {
       return
     }
-    if (is.dev) {
+    // Fork flavor: no updates; the official feeds would replace this build with the official app.
+    if (is.dev || !getAppFlavor().autoUpdates) {
       return
     }
 

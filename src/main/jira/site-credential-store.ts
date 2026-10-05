@@ -10,6 +10,7 @@ import {
   readStoredCredentialToken
 } from '../integration-credential-file'
 import type { JiraSite, JiraSiteSelection } from '../../shared/jira-types'
+import { getAppFlavor } from '../../shared/app-flavor'
 
 export type JiraSiteFile = {
   version: 1
@@ -26,7 +27,7 @@ const cachedTokens = new Map<string, string>()
 export const credentialErrors = new Map<string, string>()
 
 function getOrcaDir(): string {
-  return join(homedir(), '.orca')
+  return join(homedir(), getAppFlavor().homeStateDirName)
 }
 
 function getSiteFilePath(): string {

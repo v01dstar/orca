@@ -17,6 +17,16 @@ export const HangarTokensSchema = z.object({
 })
 export type HangarTokens = z.infer<typeof HangarTokensSchema>
 
+// Device flow (mobile sign-in): the user opens verificationUri and enters userCode.
+export const HangarDeviceStartSchema = z.object({
+  deviceCode: z.string().min(1),
+  userCode: z.string().min(1),
+  verificationUri: z.string().min(1),
+  interval: z.number(),
+  expiresIn: z.number()
+})
+export type HangarDeviceStart = z.infer<typeof HangarDeviceStartSchema>
+
 export const HangarMeSchema = z.object({
   userId: z.number(),
   login: z.string(),

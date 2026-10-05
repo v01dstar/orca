@@ -1,4 +1,5 @@
 import type { OrcaRuntimeService } from '../orca-runtime'
+import { getAppFlavor } from '../../../shared/app-flavor'
 import type { RpcAnyMethodDeclaration } from '../rpc/core'
 import type { DeviceRegistry } from '../device-registry'
 import type { E2EEKeypair } from '../e2ee-keypair'
@@ -14,7 +15,8 @@ import type {
 } from '../../../shared/mobile-relay-credential-contract'
 import type { RelayDeviceBinding, RelayRevokeOutboxItem } from '../relay/relay-revoke-outbox'
 
-export const DEFAULT_WS_PORT = 6768
+// Fork: the hangar flavor defaults beside the official app's port instead of racing it.
+export const DEFAULT_WS_PORT = getAppFlavor().id === 'hangar' ? 6770 : 6768
 
 // Why: STA-2370 — the WS listener defaults to loopback so a desktop with no paired device is not
 // reachable from the LAN; it widens to all interfaces only on explicit pairing (or `orca serve`).

@@ -1,4 +1,5 @@
 import { chmod, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { getAppFlavor } from '../../shared/app-flavor'
 import { accessSync, constants, existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { delimiter, dirname, isAbsolute, join } from 'node:path'
@@ -92,7 +93,7 @@ function bundledLauncherPath(): string | null {
     return null
   }
   if (process.platform === 'darwin') {
-    return join(process.resourcesPath, 'bin', 'orca')
+    return join(process.resourcesPath, 'bin', getAppFlavor().cliCommandName)
   }
   if (process.platform === 'linux') {
     return join(process.resourcesPath, 'bin', 'orca-ide')

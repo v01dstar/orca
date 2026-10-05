@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { getAppFlavor } from '../../shared/app-flavor'
 import { lstatSync, realpathSync } from 'node:fs'
 import { userInfo } from 'node:os'
 import { basename, dirname, join } from 'node:path'
@@ -9,7 +10,7 @@ import {
 } from '../macos-keychain/generic-password'
 
 const ACTIVE_CLAUDE_SERVICE = 'Claude Code-credentials'
-const ORCA_CLAUDE_SERVICE = 'Orca Claude Code Managed Credentials'
+const ORCA_CLAUDE_SERVICE = `${getAppFlavor().appName} Claude Code Managed Credentials`
 export async function readActiveClaudeKeychainCredentials(
   configDir?: string
 ): Promise<string | null> {

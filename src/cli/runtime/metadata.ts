@@ -1,4 +1,5 @@
 import { homedir } from 'node:os'
+import { getAppFlavor } from '../../shared/app-flavor'
 import { join } from 'node:path'
 import { readFileSync } from 'node:fs'
 import {
@@ -51,7 +52,7 @@ export function getDefaultUserDataPath(
     return process.env.ORCA_USER_DATA_PATH
   }
   if (platform === 'darwin') {
-    return join(homeDir, 'Library', 'Application Support', 'orca')
+    return join(homeDir, 'Library', 'Application Support', getAppFlavor().userDataDirName)
   }
   if (platform === 'win32') {
     const appData = process.env.APPDATA
@@ -61,10 +62,13 @@ export function getDefaultUserDataPath(
         'APPDATA is not set, so the Orca runtime metadata path cannot be resolved.'
       )
     }
-    return join(appData, 'orca')
+    return join(appData, getAppFlavor().userDataDirName)
   }
   // Why: the CLI must find the same metadata file Electron writes in packaged
   // runs, so this mirrors Electron's default userData base instead of inventing
   // a CLI-specific config path.
-  return join(process.env.XDG_CONFIG_HOME || join(homeDir, '.config'), 'orca')
+  return join(
+    process.env.XDG_CONFIG_HOME || join(homeDir, '.config'),
+    getAppFlavor().userDataDirName
+  )
 }

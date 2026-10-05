@@ -1,4 +1,5 @@
 import { app } from 'electron'
+import { getAppFlavor } from '../../shared/app-flavor'
 import { is } from '@electron-toolkit/utils'
 import { isMacInstallRequested } from '../updater-mac-install'
 import type { UpdateCheckOptions } from '../../shared/update-status-types'
@@ -15,7 +16,7 @@ export abstract class UpdaterMenuChecks extends UpdaterScheduling {
     ) {
       return
     }
-    if (!app.isPackaged || is.dev) {
+    if (!app.isPackaged || is.dev || !getAppFlavor().autoUpdates) {
       this.sendStatus({ state: 'not-available', userInitiated: true })
       return
     }

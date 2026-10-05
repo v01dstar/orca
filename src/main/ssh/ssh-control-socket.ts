@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { getAppFlavor } from '../../shared/app-flavor'
 import { lstatSync, mkdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { isAbsolute, join as pathJoin } from 'node:path'
@@ -90,9 +91,9 @@ function getControlSocketDirectoryCandidates(uid: number): string[] {
   const candidates: string[] = []
   const xdgRuntimeDir = process.env.XDG_RUNTIME_DIR
   if (xdgRuntimeDir && isAbsolute(xdgRuntimeDir)) {
-    candidates.push(pathJoin(xdgRuntimeDir, 'orca-ssh'))
+    candidates.push(pathJoin(xdgRuntimeDir, `${getAppFlavor().tmpPrefix}-ssh`))
   }
-  candidates.push(pathJoin(tmpdir(), `orca-ssh-${uid}`))
+  candidates.push(pathJoin(tmpdir(), `${getAppFlavor().tmpPrefix}-ssh-${uid}`))
   return candidates
 }
 

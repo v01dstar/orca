@@ -2,6 +2,7 @@
 // Node and React Native. Mutations carry an Idempotency-Key, reused when a timeout is retried.
 import { z } from 'zod'
 import {
+  HangarDeviceStartSchema,
   HangarErrorSchema,
   HangarMachineSchema,
   HangarMeSchema,
@@ -10,6 +11,7 @@ import {
   HangarTemplateSchema,
   HangarTokensSchema,
   type HangarCreateMachineRequest,
+  type HangarDeviceStart,
   type HangarMachine,
   type HangarMachineAction,
   type HangarMe,
@@ -78,13 +80,20 @@ export function createHangarApiClient(options: HangarApiClientOptions) {
     if (opts.idempotencyKey) {
       headers['Idempotency-Key'] = opts.idempotencyKey
     }
-    return fetchImpl(`${baseUrl}${path}`, {
-      method: opts.method ?? 'GET',
-      headers,
-      body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
-      redirect: 'error',
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
-    })
+    // Why not AbortSignal.timeout: Hermes (mobile) does not implement it.
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+    try {
+      return await fetchImpl(`${baseUrl}${path}`, {
+        method: opts.method ?? 'GET',
+        headers,
+        body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
+        redirect: 'error',
+        signal: controller.signal
+      })
+    } finally {
+      clearTimeout(timer)
+    }
   }
 
   async function request<T>(schema: z.ZodType<T>, path: string, opts: RequestOptions = {}) {
@@ -201,6 +210,38 @@ export function createHangarApiClient(options: HangarApiClientOptions) {
         body: args,
         auth: false
       }),
+    startDeviceLogin: (): Promise<HangarDeviceStart> =>
+      request(HangarDeviceStartSchema, '/v1/auth/device', {
+        method: 'POST',
+        body: {},
+        auth: false
+      }),
+    /** Polls until the user authorizes the device code; rejects when denied or expired. */
+    async waitForDeviceLogin(
+      start: HangarDeviceStart,
+      signal?: AbortSignal
+    ): Promise<HangarTokens> {
+      let intervalMs = Math.max(start.interval, 1) * 1000
+      for (;;) {
+        await sleep(intervalMs, signal)
+        try {
+          return await request(HangarTokensSchema, '/v1/auth/device/token', {
+            method: 'POST',
+            body: { deviceCode: start.deviceCode },
+            auth: false
+          })
+        } catch (error) {
+          if (!(error instanceof HangarApiError)) {
+            throw error
+          }
+          if (error.code === 'slow_down') {
+            intervalMs += 5000
+          } else if (error.code !== 'authorization_pending') {
+            throw error
+          }
+        }
+      }
+    },
     refresh: (refreshToken: string): Promise<HangarTokens> =>
       request(HangarTokensSchema, '/v1/auth/refresh', {
         method: 'POST',

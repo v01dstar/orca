@@ -5,6 +5,7 @@
 // instead of the first pane's. Without this, a second jcode pane connects the
 // first pane's daemon and its status is attributed to the wrong tab.
 import { createHash } from 'node:crypto'
+import { getAppFlavor } from './app-flavor'
 import { mkdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -17,7 +18,7 @@ export const JCODE_RUNTIME_DIR_ENV_KEY = 'JCODE_RUNTIME_DIR'
 // short while staying per-pane unique and stable across restarts.
 export function buildJcodeRuntimeDir(paneKey: string): string {
   const hash = createHash('sha256').update(paneKey).digest('hex').slice(0, 16)
-  return join(tmpdir(), 'orca-jcode', hash)
+  return join(tmpdir(), `${getAppFlavor().tmpPrefix}-jcode`, hash)
 }
 
 /** jcode's daemon model is unix-socket based; Windows support is unverified. */

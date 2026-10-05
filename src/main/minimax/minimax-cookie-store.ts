@@ -4,6 +4,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { hardenExistingSecureFile, writeSecureFile } from '../../shared/secure-file'
 import type { SecretAtRestProtection } from '../../shared/secret-at-rest-protection'
+import { getAppFlavor } from '../../shared/app-flavor'
 
 const MINIMAX_COOKIE_FILE = 'minimax-session-cookie.enc'
 const COOKIE_ENVELOPE_PREFIX = 'orca-minimax-cookie:v1:'
@@ -16,7 +17,7 @@ type MiniMaxCookieEnvelope = {
 }
 
 function getOrcaDir(): string {
-  return join(homedir(), '.orca')
+  return join(homedir(), getAppFlavor().homeStateDirName)
 }
 
 function getMiniMaxCookiePath(): string {
