@@ -12361,6 +12361,58 @@
           "offCount": "{{count}} off",
           "machines": "Machines",
           "machinesDescription": "Choose which machines can show notifications on this computer. A paired server’s switch also covers work reached through it."
+        },
+        "hangar": {
+          "HangarDeleteMachineDialog": {
+            "title": "Delete hangar machine?",
+            "description": "Deletes the machine with its root and /data disks, and every workspace on it. This cannot be undone.",
+            "cancel": "Cancel",
+            "confirm": "Delete machine"
+          },
+          "HangarCreateMachineForm": {
+            "namePlaceholder": "machine-name",
+            "name": "Machine name",
+            "template": "Template",
+            "noTemplate": "No Orca template",
+            "cancel": "Cancel",
+            "creating": "Creating machine…",
+            "create": "Create machine"
+          },
+          "HangarMachinesSection": {
+            "title": "hangar machines",
+            "description": "Run Orca on your hangar cloud machines. Signing in to hangar is all it takes; nothing is paired.",
+            "refresh": "Refresh hangar machines",
+            "signOut": "Sign out",
+            "serverUrlPlaceholder": "https://hangar.example.com",
+            "serverUrl": "hangar server URL",
+            "waitingForBrowser": "Waiting for browser sign-in…",
+            "signIn": "Sign in to hangar",
+            "loading": "Checking hangar machines…",
+            "empty": "No hangar machines yet.",
+            "newMachine": "New machine"
+          },
+          "HangarMachineRow": {
+            "running": "Running",
+            "stopped": "Stopped",
+            "suspended": "Suspended",
+            "error": "Error",
+            "starting": "Starting…",
+            "stopping": "Stopping…",
+            "suspending": "Suspending…",
+            "resuming": "Resuming…",
+            "deleting": "Deleting…",
+            "connecting": "Connecting…",
+            "start": "Start",
+            "resume": "Resume",
+            "connect": "Connect",
+            "connected": "Connected in Orca",
+            "noOrca": "Template without Orca",
+            "more": "More machine actions",
+            "suspend": "Suspend",
+            "stop": "Stop",
+            "reconnect": "Re-enroll in Orca",
+            "delete": "Delete…"
+          }
         }
       },
       "right": {
