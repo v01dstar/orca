@@ -1,3 +1,4 @@
+import { createRuntimeWebSocket } from '../hangar/hangar-lazy-websocket'
 import {
   decrypt,
   decryptBytes,
@@ -46,7 +47,8 @@ export class RpcClientSocketSession {
   private handshakeTimer: ReturnType<typeof setTimeout> | null = null
 
   constructor(private readonly options: SocketSessionOptions) {
-    this.socket = new WebSocket(options.endpoint)
+    // Fork: a hangar endpoint dials through a fresh tunnel ticket (src/hangar).
+    this.socket = createRuntimeWebSocket(options.endpoint)
     this.attachHandlers()
     this.armConnectTimeout()
   }
