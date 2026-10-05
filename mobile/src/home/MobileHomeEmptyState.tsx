@@ -1,4 +1,4 @@
-import { QrCode } from 'lucide-react-native'
+import { Cloud, QrCode } from 'lucide-react-native'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { colors, radii, spacing } from '../theme/mobile-theme'
 
@@ -22,6 +22,8 @@ export function MobileHomeEmptyState(props: {
   contentMaxWidth: number
   isWideLayout: boolean
   onPairDesktop: () => void
+  // Fork: hangar machines need no desktop pairing.
+  onOpenHangar?: () => void
 }) {
   return (
     <View
@@ -45,6 +47,12 @@ export function MobileHomeEmptyState(props: {
           <QrCode size={17} color={colors.bgBase} />
           <Text style={styles.primaryButtonText}>Pair Desktop</Text>
         </Pressable>
+        {props.onOpenHangar ? (
+          <Pressable style={styles.secondaryButton} onPress={props.onOpenHangar}>
+            <Cloud size={16} color={colors.textSecondary} />
+            <Text style={styles.secondaryButtonText}>Use hangar machines</Text>
+          </Pressable>
+        ) : null}
       </View>
       <View style={styles.stepsSection}>
         <Text style={styles.sectionHeading}>How it works</Text>
@@ -97,6 +105,14 @@ const styles = StyleSheet.create({
     borderRadius: radii.card
   },
   primaryButtonText: { color: colors.bgBase, fontSize: 15, fontWeight: '700' },
+  secondaryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: spacing.md,
+    paddingVertical: 10
+  },
+  secondaryButtonText: { color: colors.textSecondary, fontSize: 15, fontWeight: '600' },
   stepsSection: { paddingHorizontal: spacing.xl },
   sectionHeading: {
     fontSize: 11,
