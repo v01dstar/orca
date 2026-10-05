@@ -114,6 +114,7 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
     }
     const port = getOptionalServePort(flags)
     const pairingAddressValue = flags.get('pairing-address')
+    const trustedIssuerFileValue = flags.get('trusted-issuer-file')
     const exitCode = await serveOrcaApp({
       json,
       port,
@@ -121,7 +122,8 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
       noPairing,
       mobilePairing,
       recipeJson,
-      projectRoot
+      projectRoot,
+      trustedIssuerFile: typeof trustedIssuerFileValue === 'string' ? trustedIssuerFileValue : null
     })
     process.exitCode = exitCode
   },

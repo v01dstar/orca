@@ -41,6 +41,7 @@ import { mainProcessState as state } from './main-process-state'
 import { logStartupMilestone } from './startup-diagnostics'
 import { emitServeBrowserIdentityActionLine } from '../server/serve-stdout-boundary'
 import { getBrowserIdentityModeStatus } from '../browser/browser-identity-mode-store'
+import { enableHangarAssertionAuth } from '../runtime/rpc/hangar-assertion-auth'
 
 type RuntimeService = NonNullable<typeof state.runtime>
 
@@ -91,7 +92,8 @@ function installRuntimeRpc(
           preferPinnedWsPort: true
         }
       : {}),
-    webClientRoot: getBundledWebClientRoot()
+    webClientRoot: getBundledWebClientRoot(),
+    trustedIssuerFile: enableHangarAssertionAuth(serveOptions?.trustedIssuerFile)
   })
   state.runtimeRpc = runtimeRpc
   registerMobileHandlers(runtimeRpc, {

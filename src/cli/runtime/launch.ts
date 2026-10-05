@@ -86,6 +86,7 @@ export function serveOrcaApp(
     mobilePairing?: boolean
     recipeJson?: boolean
     projectRoot?: string | null
+    trustedIssuerFile?: string | null
   } = {}
 ): Promise<number> {
   const executable = resolveForegroundOrcaExecutable()
@@ -105,6 +106,9 @@ export function serveOrcaApp(
   }
   if (args.mobilePairing) {
     childArgs.push('--serve-mobile-pairing')
+  }
+  if (args.trustedIssuerFile) {
+    childArgs.push('--serve-trusted-issuer-file', args.trustedIssuerFile)
   }
   if (args.recipeJson) {
     if (!args.projectRoot) {

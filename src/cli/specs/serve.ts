@@ -6,7 +6,7 @@ export const SERVE_COMMAND_SPECS: CommandSpec[] = [
     path: ['serve'],
     summary: 'Start an Orca runtime server without opening a desktop window',
     usage:
-      'orca serve [--port <port>] [--pairing-address <host>] [--mobile-pairing] [--no-pairing] [--project-root <path>] [--recipe-json] [--json]',
+      'orca serve [--port <port>] [--pairing-address <host>] [--mobile-pairing] [--no-pairing] [--project-root <path>] [--recipe-json] [--trusted-issuer-file <path>] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'port',
@@ -14,14 +14,16 @@ export const SERVE_COMMAND_SPECS: CommandSpec[] = [
       'mobile-pairing',
       'no-pairing',
       'project-root',
-      'recipe-json'
+      'recipe-json',
+      'trusted-issuer-file'
     ],
     notes: [
       'Runs in the foreground and prints the bound endpoint, advertised endpoint, and pairing status. Stop it with Ctrl+C.',
       '--pairing-address changes only the client-advertised address; use a reachable LAN, Tailscale, SSH-forward, or reverse-proxy endpoint.',
       'Use --recipe-json with --project-root from VM recipes to print the recipe result JSON and leave the server running.',
       'Use --mobile-pairing to print a mobile-scoped pairing QR/link instead of the default runtime-environment pairing link.',
-      'When the web client bundle is available, the server also prints a browser URL with the pairing data embedded.'
+      'When the web client bundle is available, the server also prints a browser URL with the pairing data embedded.',
+      '--trusted-issuer-file (absolute path) lets clients authenticate with an assertion signed by a key in that file, as on hangar machines; the file may appear after startup.'
     ],
     examples: [
       'orca serve',

@@ -7,7 +7,11 @@ import {
 } from './mobile-e2ee-v2-desktop-session'
 import type { DesktopMobileE2EEV2OutboundItem as V2OutboundItem } from './mobile-e2ee-v2-desktop-outbound'
 import { handleDesktopMobileE2EEV2Inbound } from './mobile-e2ee-v2-desktop-inbound'
-import { authenticateMobileE2EE, decodeMobileE2EEPublicKey } from './mobile-e2ee-auth-validation'
+import {
+  authenticateMobileE2EE,
+  decodeMobileE2EEPublicKey,
+  type E2EEDeviceResolvers
+} from './mobile-e2ee-auth-validation'
 import {
   isMobileE2EEBinaryPayloadWithinLimit,
   isMobileE2EEOutboundItemWithinLimit,
@@ -26,9 +30,8 @@ type OutboundBudgetEmitter = EventProps<'remote_outbound_budget_close'>['emitter
 const HANDSHAKE_TIMEOUT_MS = 10_000
 const MAX_CONSECUTIVE_DECRYPT_FAILURES = 5
 
-export type E2EEChannelOptions = {
+export type E2EEChannelOptions = E2EEDeviceResolvers<E2EEAuthenticatedDevice> & {
   serverSecretKey: Uint8Array
-  resolveAuthenticatedDevice: (token: string) => E2EEAuthenticatedDevice | null
   onReady: (channel: E2EEChannel, device: E2EEAuthenticatedDevice) => void
   onError: (code: number, reason: string) => void
   transportContext?: DesktopMobileE2EEV2Context
@@ -49,7 +52,7 @@ export class E2EEChannel {
   private handshakeTimer: ReturnType<typeof setTimeout> | null = null
   private readonly ws: WebSocket
   private readonly serverSecretKey: Uint8Array
-  private readonly resolveAuthenticatedDevice: (token: string) => E2EEAuthenticatedDevice | null
+  private readonly resolvers: E2EEDeviceResolvers<E2EEAuthenticatedDevice>
   private readonly onReady: (channel: E2EEChannel, device: E2EEAuthenticatedDevice) => void
   private readonly onError: (code: number, reason: string) => void
   private readonly transportContext: DesktopMobileE2EEV2Context
@@ -73,7 +76,7 @@ export class E2EEChannel {
   constructor(ws: WebSocket, options: E2EEChannelOptions) {
     this.ws = ws
     this.serverSecretKey = options.serverSecretKey
-    this.resolveAuthenticatedDevice = options.resolveAuthenticatedDevice
+    this.resolvers = options
     this.onReady = options.onReady
     this.onError = options.onError
     this.transportContext = options.transportContext ?? { transport: 'direct' }
@@ -244,7 +247,7 @@ export class E2EEChannel {
     const authentication = authenticateMobileE2EE({
       plaintext,
       v2Session: this.v2Session,
-      resolveDevice: this.resolveAuthenticatedDevice
+      ...this.resolvers
     })
     if (!authentication.ok) {
       this.sendEncryptedControl({ type: 'e2ee_error', error: { code: authentication.code } })

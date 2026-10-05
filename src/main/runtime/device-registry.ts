@@ -38,6 +38,9 @@ export type DeviceEntry = {
   // Why: survives a desktop restart so the host can keep pushing without the phone
   // re-registering. Absent on every registry written before background push existed.
   pushRegistration?: MobilePushRegistration
+  // Why: set on rows created for a hangar session (assertion `sid`) instead of by pairing, so
+  // presence, push and per-device budgets work the same for clients that never paired.
+  hangarSessionId?: string
 }
 
 function validRelayBinding(value: unknown, deviceId: string): RelayDeviceBinding | undefined {
@@ -63,6 +66,8 @@ function validRelayBinding(value: unknown, deviceId: string): RelayDeviceBinding
 // paying a secure-file rewrite (two synchronous PowerShell ACL spawns on Windows) per connection.
 const LAST_SEEN_FLUSH_DELAY_MS = 250
 const STALE_WRITE_TEMP_AGE_MS = 24 * 60 * 60 * 1000
+// Why: hangar sessions end without telling the runtime, so their rows age out instead.
+const HANGAR_DEVICE_RETENTION_MS = 30 * 24 * 60 * 60 * 1000
 
 export class DeviceRegistry {
   private readonly registryPath: string
@@ -92,7 +97,8 @@ export class DeviceRegistry {
     existingDevices: DeviceEntry[],
     name: string,
     scope: DeviceScope,
-    pairingReach: RuntimePairingReach
+    pairingReach: RuntimePairingReach,
+    hangarSessionId?: string
   ): DeviceEntry {
     const entry: DeviceEntry = {
       deviceId: randomUUID(),
@@ -100,8 +106,10 @@ export class DeviceRegistry {
       token: randomBytes(24).toString('hex'),
       scope,
       pairedAt: Date.now(),
-      lastSeenAt: 0,
-      pairingReach
+      // Why: a hangar row is authenticated as it is created; zero marks an unscanned pairing token.
+      lastSeenAt: hangarSessionId ? Date.now() : 0,
+      pairingReach,
+      ...(hangarSessionId ? { hangarSessionId } : {})
     }
     const nextDevices = [...existingDevices, entry]
     // Why: a credential is not valid until its durable registry write succeeds.
@@ -157,6 +165,18 @@ export class DeviceRegistry {
   ): DeviceEntry {
     const retainedDevices = this.devices.filter((d) => d.lastSeenAt !== 0 || d.scope !== scope)
     return this.createAndPersistDevice(retainedDevices, name, scope, pairingReach)
+  }
+
+  /** One row per hangar session and scope, so a client's many sockets share one device. */
+  getOrCreateHangarDevice(sessionId: string, scope: DeviceScope): DeviceEntry {
+    const existing = this.devices.find((d) => d.hangarSessionId === sessionId && d.scope === scope)
+    if (existing) {
+      return existing
+    }
+    const cutoff = Date.now() - HANGAR_DEVICE_RETENTION_MS
+    const retained = this.devices.filter((d) => !d.hangarSessionId || d.lastSeenAt >= cutoff)
+    const name = scope === 'mobile' ? 'hangar mobile session' : 'hangar desktop session'
+    return this.createAndPersistDevice(retained, name, scope, 'network', sessionId)
   }
 
   removeDevice(deviceId: string): boolean {

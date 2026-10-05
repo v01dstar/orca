@@ -69,8 +69,19 @@ describe('orca cli worktree awareness', () => {
       noPairing: true,
       mobilePairing: false,
       recipeJson: false,
-      projectRoot: null
+      projectRoot: null,
+      trustedIssuerFile: null
     })
+  })
+
+  it('passes a trusted issuer file through to the headless server', async () => {
+    serveOrcaAppMock.mockResolvedValue(0)
+
+    await main(['serve', '--trusted-issuer-file', '/etc/hangar/orca-trust.json'], '/tmp/repo')
+
+    expect(serveOrcaAppMock).toHaveBeenCalledWith(
+      expect.objectContaining({ trustedIssuerFile: '/etc/hangar/orca-trust.json' })
+    )
   })
 
   it('starts a foreground headless server with mobile pairing enabled', async () => {
@@ -88,7 +99,8 @@ describe('orca cli worktree awareness', () => {
       noPairing: false,
       mobilePairing: true,
       recipeJson: false,
-      projectRoot: null
+      projectRoot: null,
+      trustedIssuerFile: null
     })
   })
 
@@ -114,7 +126,8 @@ describe('orca cli worktree awareness', () => {
       noPairing: false,
       mobilePairing: false,
       recipeJson: true,
-      projectRoot: '/workspace/repo'
+      projectRoot: '/workspace/repo',
+      trustedIssuerFile: null
     })
   })
 

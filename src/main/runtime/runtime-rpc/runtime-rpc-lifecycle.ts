@@ -214,6 +214,7 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
     const mobileSocketWiring = new MobileSocketWiring({
       deviceRegistry,
       e2eeKeypair,
+      trustedIssuerFile: this.trustedIssuerFile,
       onText: (socket, plaintext, reply, sendBinary) => {
         void this.handleWebSocketMessage(
           plaintext,
