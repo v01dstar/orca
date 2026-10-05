@@ -1,3 +1,4 @@
+import { createRuntimeWebSocket } from '../hangar/hangar-lazy-websocket'
 import { isTailscaleEndpoint } from '../../../src/shared/remote-runtime-tailscale-hint'
 
 const HOST_REACHABILITY_TIMEOUT_MS = 4000
@@ -8,7 +9,7 @@ export async function testHostReachability(endpoint: string): Promise<boolean> {
   return new Promise((resolve) => {
     let ws: WebSocket
     try {
-      ws = new WebSocket(endpoint)
+      ws = createRuntimeWebSocket(endpoint)
     } catch {
       resolve(false)
       return
