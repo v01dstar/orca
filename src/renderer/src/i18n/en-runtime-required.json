@@ -1722,6 +1722,58 @@
             "f472e97440": "aider"
           }
         },
+        "hangar": {
+          "HangarCreateMachineForm": {
+            "cancel": "Cancel",
+            "create": "Create machine",
+            "creating": "Creating machine…",
+            "name": "Machine name",
+            "namePlaceholder": "machine-name",
+            "noTemplate": "No Orca template",
+            "template": "Template"
+          },
+          "HangarDeleteMachineDialog": {
+            "cancel": "Cancel",
+            "confirm": "Delete machine",
+            "description": "Deletes the machine with its root and /data disks, and every workspace on it. This cannot be undone.",
+            "title": "Delete hangar machine?"
+          },
+          "HangarMachineRow": {
+            "connect": "Connect",
+            "connected": "Connected in Orca",
+            "connecting": "Connecting…",
+            "delete": "Delete…",
+            "deleting": "Deleting…",
+            "error": "Error",
+            "more": "More machine actions",
+            "noOrca": "Template without Orca",
+            "reconnect": "Re-enroll in Orca",
+            "resume": "Resume",
+            "resuming": "Resuming…",
+            "running": "Running",
+            "start": "Start",
+            "starting": "Starting…",
+            "stop": "Stop",
+            "stopped": "Stopped",
+            "stopping": "Stopping…",
+            "suspend": "Suspend",
+            "suspended": "Suspended",
+            "suspending": "Suspending…"
+          },
+          "HangarMachinesSection": {
+            "description": "Run Orca on your hangar cloud machines. Signing in to hangar is all it takes; nothing is paired.",
+            "empty": "No hangar machines yet.",
+            "loading": "Checking hangar machines…",
+            "newMachine": "New machine",
+            "refresh": "Refresh hangar machines",
+            "serverUrl": "hangar server URL",
+            "serverUrlPlaceholder": "https://hangar.example.com",
+            "signIn": "Sign in to hangar",
+            "signOut": "Sign out",
+            "title": "hangar machines",
+            "waitingForBrowser": "Waiting for browser sign-in…"
+          }
+        },
         "integrations": {
           "search": {
             "c97d58a0f3": "Bitbucket Cloud authentication via API token environment variables."
