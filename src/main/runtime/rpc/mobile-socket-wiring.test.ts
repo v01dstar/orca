@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
 import nacl from 'tweetnacl'
-import type { WebSocket } from 'ws'
 import {
   encodeMobileE2EEV2Transcript,
   validateMobileE2EEV2Handshake,
@@ -11,43 +10,8 @@ import { sealMobileE2EEV2Frame } from '../../../shared/mobile-e2ee-v2-framing'
 import type { DeviceRegistry } from '../device-registry'
 import { deriveSharedKey, encrypt, generateKeyPair } from './e2ee-crypto'
 import { deriveMobileE2EEV2KeySchedule } from './mobile-e2ee-v2-key-schedule'
-import {
-  MobileSocketWiring,
-  type MobileSocketTransport,
-  type MobileSocketTransportMetadata
-} from './mobile-socket-wiring'
-
-class FakeSocket {
-  readonly OPEN = 1
-  readyState = this.OPEN
-  bufferedAmount = 0
-  readonly sent: (string | Buffer)[] = []
-  readonly send = vi.fn((data: string | Buffer) => this.sent.push(data))
-  readonly close = vi.fn()
-}
-
-class FakeTransport implements MobileSocketTransport {
-  private messageHandler: Parameters<MobileSocketTransport['onMessage']>[0] | null = null
-  private closeHandler: Parameters<MobileSocketTransport['onConnectionClose']>[0] | null = null
-  readonly setClientId = vi.fn()
-  readonly terminateClientConnections = vi.fn(() => 0)
-
-  onMessage(handler: Parameters<MobileSocketTransport['onMessage']>[0]): void {
-    this.messageHandler = handler
-  }
-
-  onConnectionClose(handler: Parameters<MobileSocketTransport['onConnectionClose']>[0]): void {
-    this.closeHandler = handler
-  }
-
-  receive(ws: FakeSocket, message: string): void {
-    this.messageHandler?.(message, vi.fn(), ws as unknown as WebSocket)
-  }
-
-  disconnect(ws: FakeSocket): void {
-    this.closeHandler?.(null, ws as unknown as WebSocket, false)
-  }
-}
+import { MobileSocketWiring, type MobileSocketTransportMetadata } from './mobile-socket-wiring'
+import { FakeSocket, FakeTransport } from './mobile-socket-wiring-test-harness'
 
 function registryFor(
   deviceId: string,

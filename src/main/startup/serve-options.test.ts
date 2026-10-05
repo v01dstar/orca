@@ -13,7 +13,8 @@ describe('getServeOptions', () => {
       noPairing: true,
       mobilePairing: false,
       recipeJson: false,
-      projectRoot: null
+      projectRoot: null,
+      trustedIssuerFile: null
     })
   })
 
@@ -29,7 +30,8 @@ describe('getServeOptions', () => {
     ).toMatchObject({
       wsPort: 6768,
       pairingAddress: '127.0.0.1',
-      projectRoot: '/tmp/repo'
+      projectRoot: '/tmp/repo',
+      trustedIssuerFile: null
     })
   })
 
@@ -51,7 +53,8 @@ describe('getServeOptions', () => {
     ).toMatchObject({
       wsPort: 6769,
       pairingAddress: 'last.example',
-      projectRoot: '/last'
+      projectRoot: '/last',
+      trustedIssuerFile: null
     })
   })
 
@@ -143,7 +146,8 @@ describe('getServeOptions', () => {
       noPairing: false,
       mobilePairing: false,
       recipeJson: false,
-      projectRoot: null
+      projectRoot: null,
+      trustedIssuerFile: null
     })
   })
 
@@ -157,5 +161,25 @@ describe('getServeOptions', () => {
     expect(() => getServeOptions(['/AppRun', '--serve', '--serve-port', value])).toThrow(
       'Missing value for --serve-port.'
     )
+  })
+
+  it('parses an absolute trusted issuer file and rejects a relative one', () => {
+    expect(
+      getServeOptions(['/AppRun', '--serve', '--serve-trusted-issuer-file', '/etc/hangar/t.json'])
+        .trustedIssuerFile
+    ).toBe('/etc/hangar/t.json')
+    expect(
+      getServeOptions(normalizeServeModeArgv(['/AppRun', 'serve', '--trusted-issuer-file=/t.json']))
+        .trustedIssuerFile
+    ).toBe('/t.json')
+    expect(() =>
+      getServeOptions(['/AppRun', '--serve', '--serve-trusted-issuer-file', 'trust.json'])
+    ).toThrow('--serve-trusted-issuer-file must be absolute: trust.json')
+    expect(() => getServeOptions(['/AppRun', '--serve', '--serve-trusted-issuer-file'])).toThrow(
+      'Missing value for --serve-trusted-issuer-file.'
+    )
+    expect(() =>
+      getServeOptions(['/AppRun', '--serve', '--trusted-issuer-fil', '/t.json'])
+    ).toThrow('Did you mean --trusted-issuer-file?')
   })
 })

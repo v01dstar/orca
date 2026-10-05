@@ -3,6 +3,7 @@ import type { WebSocket } from 'ws'
 import type { DeviceEntry, DeviceRegistry } from '../device-registry'
 import type { E2EEKeypair } from '../e2ee-keypair'
 import { E2EEChannel, type E2EEAuthenticatedDevice } from './e2ee-channel'
+import { authenticateHangarAssertion } from './hangar-assertion-auth'
 import { createMobileE2EEOutboundMemoryBudget } from './mobile-e2ee-outbound-memory-budget'
 import type { RuntimeCapability } from '../../../shared/protocol-version'
 
@@ -55,6 +56,9 @@ type MobileSocketWiringOptions = {
   onReady?: (socket: AuthenticatedMobileSocket) => void
   // Why: stale keys and missing registry entries both fail before RPC can explain the re-pair action.
   onUnpairedDeviceAuthFailure?: (metadata: MobileSocketTransportMetadata) => void
+  // Why: `orca serve --trusted-issuer-file` on hangar machines; direct sockets may then
+  // authenticate with a hangar assertion instead of a paired device token.
+  trustedIssuerFile?: string
 }
 
 function toAuthenticatedDevice(device: DeviceEntry): E2EEAuthenticatedDevice {
@@ -73,6 +77,7 @@ export class MobileSocketWiring {
   private readonly onClose: MobileSocketWiringOptions['onClose']
   private readonly onReady: MobileSocketWiringOptions['onReady']
   private readonly onUnpairedDeviceAuthFailure: MobileSocketWiringOptions['onUnpairedDeviceAuthFailure']
+  private readonly trustedIssuerFile: string | undefined
   private readonly channels = new Map<WebSocket, E2EEChannel>()
   private readonly connectionIds = new Map<WebSocket, string>()
   private readonly authenticatedSockets = new Map<WebSocket, AuthenticatedMobileSocket>()
@@ -87,6 +92,26 @@ export class MobileSocketWiring {
     this.onClose = options.onClose
     this.onReady = options.onReady
     this.onUnpairedDeviceAuthFailure = options.onUnpairedDeviceAuthFailure
+    this.trustedIssuerFile = options.trustedIssuerFile
+  }
+
+  private resolveHangarDevice(
+    trustedIssuerFile: string,
+    assertion: string
+  ): E2EEAuthenticatedDevice | null {
+    const claims = authenticateHangarAssertion(assertion, trustedIssuerFile)
+    if (!claims) {
+      return null
+    }
+    try {
+      return toAuthenticatedDevice(
+        this.deviceRegistry.getOrCreateHangarDevice(claims.sid, claims.scope)
+      )
+    } catch (error) {
+      // Why: an unwritable registry must refuse the client, not throw out of the handshake.
+      console.error('[hangar] Failed to record a hangar session device:', error)
+      return null
+    }
   }
 
   attachTransport(
@@ -160,6 +185,12 @@ export class MobileSocketWiring {
           }
           return toAuthenticatedDevice(device)
         },
+        // Why: hangar reaches the runtime only through its own tunnel, which arrives as a direct socket.
+        ...(metadata.transport === 'direct' && this.trustedIssuerFile
+          ? {
+              resolveAssertedDevice: this.resolveHangarDevice.bind(this, this.trustedIssuerFile)
+            }
+          : {}),
         onReady: (channel, device) => {
           const socket = {
             ws,

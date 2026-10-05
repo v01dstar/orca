@@ -11,6 +11,7 @@ import type { DeviceScope } from '../device-registry'
 import { RuntimeRpcRequestAdmission } from './runtime-rpc-request-admission'
 import { classifyRuntimeLongPoll } from './runtime-rpc-long-poll'
 import { MOBILE_RPC_METHOD_ALLOWLIST } from './runtime-rpc-mobile-method-allowlist'
+import { FORK_MOBILE_RPC_METHOD_ALLOWLIST } from './runtime-rpc-mobile-method-fork-allowlist'
 
 // Why: status.get has no per-connection context in the dispatcher, so stamp the scope here at the transport boundary.
 function injectDeviceScope(response: string, scope: DeviceScope): string {
@@ -73,7 +74,11 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcRequestAdmission {
       reply(JSON.stringify(this.buildError(request.id, 'unauthorized', 'Invalid device token')))
       return
     }
-    if (device.scope === 'mobile' && !MOBILE_RPC_METHOD_ALLOWLIST.has(request.method)) {
+    if (
+      device.scope === 'mobile' &&
+      !MOBILE_RPC_METHOD_ALLOWLIST.has(request.method) &&
+      !FORK_MOBILE_RPC_METHOD_ALLOWLIST.has(request.method)
+    ) {
       reply(
         JSON.stringify(
           this.buildError(

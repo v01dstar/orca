@@ -31,7 +31,9 @@ const SERVE_SECURITY_FLAG_NAMES = [
   '--recipe-json',
   '--serve-recipe-json',
   '--pairing-address',
-  '--serve-pairing-address'
+  '--serve-pairing-address',
+  '--trusted-issuer-file',
+  '--serve-trusted-issuer-file'
 ] as const
 
 const SERVE_VALUE_FLAG_NAMES = new Set([
@@ -42,7 +44,9 @@ const SERVE_VALUE_FLAG_NAMES = new Set([
   '--project-root',
   '--serve-project-root',
   '--pairing-code',
-  '--environment'
+  '--environment',
+  '--trusted-issuer-file',
+  '--serve-trusted-issuer-file'
 ])
 
 function flagName(token: string): string {

@@ -1,3 +1,4 @@
+import { isAbsolute } from 'node:path'
 import {
   getServeFlagTypoError,
   getServeOptionValidationError
@@ -11,6 +12,7 @@ export type ServeOptions = {
   mobilePairing: boolean
   recipeJson: boolean
   projectRoot: string | null
+  trustedIssuerFile: string | null
 }
 
 function optionsBeforeTerminator(argv: readonly string[]): readonly string[] {
@@ -124,7 +126,17 @@ export function getServeOptions(argv: readonly string[]): ServeOptions {
       ['--serve-project-root', '--project-root'],
       false,
       '--serve-project-root'
+    ),
+    trustedIssuerFile: valueAfter(
+      optionsArgv,
+      ['--serve-trusted-issuer-file', '--trusted-issuer-file'],
+      true,
+      '--serve-trusted-issuer-file'
     )
+  }
+  // Why: relative to a service's working directory it would silently trust a different file.
+  if (options.trustedIssuerFile && !isAbsolute(options.trustedIssuerFile)) {
+    throw new Error(`--serve-trusted-issuer-file must be absolute: ${options.trustedIssuerFile}`)
   }
   const validationError = getServeOptionValidationError(options)
   if (validationError) {
