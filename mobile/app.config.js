@@ -23,7 +23,15 @@ module.exports = ({ config }) => ({
     entitlements: { ...config.ios?.entitlements, 'aps-environment': APS_ENVIRONMENT }
   },
   ...(HANGAR_FLAVOR ? { android: { ...config.android, package: 'com.v01dstar.orcahangar' } } : {}),
-  plugins: (config.plugins ?? []).map((plugin) =>
+  plugins: [
+    ...(config.plugins ?? []).map((plugin) =>
+      HANGAR_FLAVOR && Array.isArray(plugin) && plugin[0] === 'expo-build-properties'
+        ? [plugin[0], { ...plugin[1], ios: { ...plugin[1]?.ios, deploymentTarget: '16.0' } }]
+        : plugin
+    ),
+    // Fork: hangar builds are made with Xcode 27 (iOS 27 SDK), which requires scene lifecycle.
+    ...(HANGAR_FLAVOR ? ['./plugins/ios-scene-lifecycle.js'] : [])
+  ].map((plugin) =>
     plugin === 'expo-notifications'
       ? [
           'expo-notifications',
