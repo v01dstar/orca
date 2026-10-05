@@ -70,6 +70,24 @@ export function authenticateMobileE2EE<TDevice extends { deviceToken: string }>(
     : { ok: false, code: 'unauthorized' }
 }
 
+export function e2eeAuthenticatedControl(
+  v2Session: DesktopMobileE2EEV2Session | null,
+  auth: MobileE2EEAuth,
+  deviceToken: string
+): Record<string, unknown> {
+  // Why: a client admitted by a hangar assertion holds no device token; it keeps this one so its
+  // later sockets authenticate like a paired device (each still needs a hangar tunnel ticket).
+  const issued = auth.hangarAssertion ? { deviceToken } : {}
+  return v2Session
+    ? {
+        type: 'e2ee_authenticated',
+        v: 2,
+        transcriptHashB64: v2Session.transcriptHashB64,
+        ...issued
+      }
+    : { type: 'e2ee_authenticated', ...issued }
+}
+
 export function decodeMobileE2EEPublicKey(value: string): Uint8Array | null {
   try {
     return publicKeyFromBase64(value)
