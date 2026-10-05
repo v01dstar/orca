@@ -11,12 +11,18 @@
 const APS_ENVIRONMENT =
   process.env.ORCA_IOS_APS_ENVIRONMENT === 'production' ? 'production' : 'development'
 
+// Fork: `ORCA_FLAVOR=hangar` builds an app that installs beside the official Orca mobile app.
+const HANGAR_FLAVOR = process.env.ORCA_FLAVOR === 'hangar'
+
 module.exports = ({ config }) => ({
   ...config,
+  ...(HANGAR_FLAVOR ? { name: 'Orca Hangar', scheme: 'orca-hangar' } : {}),
   ios: {
     ...config.ios,
+    ...(HANGAR_FLAVOR ? { bundleIdentifier: 'com.v01dstar.orcahangar' } : {}),
     entitlements: { ...config.ios?.entitlements, 'aps-environment': APS_ENVIRONMENT }
   },
+  ...(HANGAR_FLAVOR ? { android: { ...config.android, package: 'com.v01dstar.orcahangar' } } : {}),
   plugins: (config.plugins ?? []).map((plugin) =>
     plugin === 'expo-notifications'
       ? [
