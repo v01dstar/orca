@@ -57,9 +57,9 @@ describe('MobileSocketWiring hangar assertions', () => {
     const trustedIssuerFile = issuer.writeTrustFile(dir)
     const first = connect({ hangarAssertion: issuer.sign() }, { trustedIssuerFile })
 
-    expect(first.control).toEqual([{ type: 'e2ee_authenticated' }])
     const devices = first.registry.listDevices()
     expect(devices).toHaveLength(1)
+    expect(first.control).toEqual([{ type: 'e2ee_authenticated', deviceToken: devices[0]!.token }])
     expect(devices[0]).toMatchObject({ hangarSessionId: 'session-1', scope: 'runtime' })
     expect(first.transport.setClientId).toHaveBeenCalledWith(first.ws, devices[0]!.token)
 
@@ -69,8 +69,12 @@ describe('MobileSocketWiring hangar assertions', () => {
     })
 
     const second = connect({ hangarAssertion: issuer.sign() }, { trustedIssuerFile })
-    expect(second.control).toEqual([{ type: 'e2ee_authenticated' }])
+    expect(second.control).toEqual([{ type: 'e2ee_authenticated', deviceToken: devices[0]!.token }])
     expect(second.registry.listDevices().map((d) => d.deviceId)).toEqual([devices[0]!.deviceId])
+
+    // Later sockets authenticate with the issued token like a paired device, and get no token back.
+    const paired = connect({ deviceToken: devices[0]!.token }, { trustedIssuerFile })
+    expect(paired.control).toEqual([{ type: 'e2ee_authenticated' }])
   })
 
   it('refuses an assertion when the runtime was not started with a trust file', () => {

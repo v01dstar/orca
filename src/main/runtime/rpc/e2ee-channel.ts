@@ -10,6 +10,7 @@ import { handleDesktopMobileE2EEV2Inbound } from './mobile-e2ee-v2-desktop-inbou
 import {
   authenticateMobileE2EE,
   decodeMobileE2EEPublicKey,
+  e2eeAuthenticatedControl,
   type E2EEDeviceResolvers
 } from './mobile-e2ee-auth-validation'
 import {
@@ -271,13 +272,7 @@ export class E2EEChannel {
     // their immutable relayDeviceId in the resolver.
     this.onReady(this, authenticatedDevice)
     this.sendEncryptedControl(
-      this.v2Session
-        ? {
-            type: 'e2ee_authenticated',
-            v: 2,
-            transcriptHashB64: this.v2Session.transcriptHashB64
-          }
-        : { type: 'e2ee_authenticated' }
+      e2eeAuthenticatedControl(this.v2Session, authentication.auth, authenticatedDevice.deviceToken)
     )
   }
 
