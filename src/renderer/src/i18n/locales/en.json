@@ -6520,6 +6520,20 @@
           "title": "Sort changed to Manual",
           "description": "Manual keeps workspaces where you drop them.",
           "restore": "Back to {{label}}"
+        },
+        "HangarHostMenuItems": {
+          "start": "Start machine",
+          "starting": "Starting hangar machine…",
+          "started": "hangar machine is running.",
+          "resume": "Resume machine",
+          "resuming": "Resuming hangar machine…",
+          "resumed": "hangar machine is running.",
+          "suspend": "Suspend machine",
+          "suspending": "Suspending hangar machine…",
+          "suspended": "hangar machine is suspended.",
+          "stop": "Stop machine",
+          "stopping": "Stopping hangar machine…",
+          "stopped": "hangar machine is stopped."
         }
       },
       "shared": {

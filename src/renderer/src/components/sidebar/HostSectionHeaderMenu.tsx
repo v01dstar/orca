@@ -35,6 +35,7 @@ import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import type { HostHeaderRow } from './host-section-rows'
 import { buildHostHeaderMenuModel } from './host-header-menu-items'
 import { HostRenameDialog } from './HostRenameDialog'
+import { HangarHostMenuItems } from './HangarHostMenuItems'
 import { HostRemoveDialog } from './HostRemoveDialog'
 import { resolveHostRemoval } from './host-rename-remove'
 
@@ -255,6 +256,7 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
             )}
           </DropdownMenuItem>
         )}
+        <HangarHostMenuItems hostId={row.hostId} />
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={handleManage}>
           <Settings2 className="size-3.5" />

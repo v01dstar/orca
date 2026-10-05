@@ -1947,6 +1947,20 @@
           "noRepos": "Add a Git project under this folder to attach GitHub or GitLab tasks.",
           "sourceProject": "Task Source"
         },
+        "HangarHostMenuItems": {
+          "resume": "Resume machine",
+          "resumed": "hangar machine is running.",
+          "resuming": "Resuming hangar machine…",
+          "start": "Start machine",
+          "started": "hangar machine is running.",
+          "starting": "Starting hangar machine…",
+          "stop": "Stop machine",
+          "stopped": "hangar machine is stopped.",
+          "stopping": "Stopping hangar machine…",
+          "suspend": "Suspend machine",
+          "suspended": "hangar machine is suspended.",
+          "suspending": "Suspending hangar machine…"
+        },
         "HostSectionHeaderMenu": {
           "63f36455cc": "Reconnect"
         },
