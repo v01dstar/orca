@@ -65,14 +65,7 @@ export function useHangarMachines(active: boolean) {
       return
     }
     void refresh()
-    const offState = window.api.hangar.onStateChanged(() => void refresh())
-    const offEnvironments = window.api.hangar.onEnvironmentsChanged(
-      () => void refreshRuntimeEnvironments()
-    )
-    return () => {
-      offState()
-      offEnvironments()
-    }
+    return window.api.hangar.onStateChanged(() => void refresh())
   }, [active, refresh])
 
   const signIn = async (serverUrl: string): Promise<void> => {

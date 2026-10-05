@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { retryAllRemoteRuntimePtyRecoveriesNow } from '@/components/terminal-pane/remote-runtime-pty-recovery-state'
+import { useAppStore } from '@/store'
 
 export function useRemoteRuntimeRecoveryTriggers(): void {
   useEffect(() => {
@@ -13,9 +14,21 @@ export function useRemoteRuntimeRecoveryTriggers(): void {
       typeof window.api?.ui?.onSystemResumed === 'function'
         ? window.api.ui.onSystemResumed(advanceRemoteRuntimeRecoveryBackoffs)
         : null
+    // Why (fork): a hangar machine started, resumed or re-enrolled; refresh hosts and reconnect now.
+    const unsubscribeHangar =
+      window.api && 'hangar' in window.api
+        ? window.api.hangar.onEnvironmentsChanged(() => {
+            void window.api.runtimeEnvironments
+              .list()
+              .then((environments) => useAppStore.getState().setRuntimeEnvironments(environments))
+              .catch(() => undefined)
+            advanceRemoteRuntimeRecoveryBackoffs()
+          })
+        : null
     return () => {
       window.removeEventListener('online', advanceRemoteRuntimeRecoveryBackoffs)
       unsubscribeSystemResumed?.()
+      unsubscribeHangar?.()
     }
   }, [])
 }
