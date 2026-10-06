@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ActivityIndicator, StyleSheet, Text, TextInput, View } from 'react-native'
+import { ActivityIndicator, Alert, StyleSheet, Text, TextInput, View } from 'react-native'
 import {
   hangarMachineActions,
   isValidHangarName
@@ -104,6 +104,25 @@ export function HangarMachineRow({
                 onPress={() => void hangar.addToOrca(machine)}
               />
             ))}
+          <HangarButton
+            destructive
+            label="Delete"
+            accessibilityLabel={`Delete ${machine.name}`}
+            onPress={() =>
+              Alert.alert(
+                `Delete ${machine.name}?`,
+                'Deletes the machine with its root and /data disks, and every workspace on it. This cannot be undone.',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: () => void hangar.deleteMachine(machine, hostId)
+                  }
+                ]
+              )
+            }
+          />
         </View>
       )}
     </View>

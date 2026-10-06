@@ -1,11 +1,12 @@
 // Fork: hangar machines on the phone — sign in (device flow), lifecycle, and add one as an Orca host.
 import { useState } from 'react'
-import { Linking, StyleSheet, Text, TextInput, View } from 'react-native'
+import { StyleSheet, Text, TextInput, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { MobileSettingsFrame } from '../settings/mobile-settings-menu'
 import { colors, spacing } from '../theme/mobile-theme'
 import { HangarButton as Button, hangarInputStyle } from './hangar-button'
 import { HangarCreateMachine } from './hangar-create-machine'
+import { HangarDeviceCode } from './hangar-device-code'
 import { HangarMachineRow } from './hangar-machine-row'
 import { useHangarMachines } from './use-hangar-machines'
 
@@ -20,19 +21,7 @@ export function HangarScreen() {
       {hangar.error ? <Text style={styles.error}>{hangar.error}</Text> : null}
       {!hangar.session ? (
         hangar.deviceCode ? (
-          <View style={styles.section}>
-            <Text style={styles.meta}>Approve this phone in hangar with the code</Text>
-            <Text selectable style={styles.code}>
-              {hangar.deviceCode.userCode}
-            </Text>
-            <Button
-              primary
-              label="Open hangar"
-              onPress={() => void Linking.openURL(hangar.deviceCode?.verificationUri ?? '')}
-            />
-            <Text style={styles.meta}>Waiting for approval…</Text>
-            <Button label="Cancel" onPress={hangar.cancelSignIn} />
-          </View>
+          <HangarDeviceCode start={hangar.deviceCode} onCancel={hangar.cancelSignIn} />
         ) : (
           <View style={styles.section}>
             <TextInput
@@ -100,13 +89,5 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm
   },
   meta: { fontSize: 13, color: colors.textSecondary },
-  code: {
-    fontSize: 28,
-    fontWeight: '700',
-    letterSpacing: 2,
-    color: colors.textPrimary,
-    textAlign: 'center',
-    marginVertical: spacing.sm
-  },
   error: { color: colors.statusRed, marginBottom: spacing.sm }
 })

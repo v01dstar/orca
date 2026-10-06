@@ -10,6 +10,8 @@ import {
   type HangarTemplate
 } from '../../../src/shared/hangar/hangar-api-types'
 import type { HangarStoredSession } from '../../../src/shared/hangar/hangar-token-source'
+import { useForgetHostClient } from '../transport/client-context'
+import { removeHostAndCloseClient } from '../transport/host-removal-lifecycle'
 import { loadHosts } from '../transport/host-store'
 import { addHangarMachineAsHost } from './hangar-host-enrollment'
 import {
@@ -41,6 +43,7 @@ export function useHangarMachines() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const signInAbort = useRef<AbortController | null>(null)
+  const forgetHostClient = useForgetHostClient()
 
   const refresh = useCallback(async () => {
     if (!(await loadHangarSession())) {
@@ -145,6 +148,15 @@ export function useHangarMachines() {
             ? { name, imageId: source.imageId }
             : { name, templateId: source.templateId }
         await client.waitForOperation(await client.createMachine(request))
+      }),
+    // Forget the Orca host first, while the machine can still answer its push unregister.
+    deleteMachine: (machine: HangarMachine, hostId: string | null) =>
+      run(machine.id, 'Deleting…', async () => {
+        if (hostId) {
+          await removeHostAndCloseClient(hostId, forgetHostClient)
+        }
+        const client = hangarClient()
+        await client.waitForOperation(await client.deleteMachine(machine.id))
       }),
     saveImage: (machine: HangarMachine, name: string) =>
       run(machine.id, 'Saving image…', () => hangarClient().createImage(machine.id, name))
