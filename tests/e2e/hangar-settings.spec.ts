@@ -111,7 +111,18 @@ test('signs in to hangar and lists machines with their Orca actions', async ({
     await expect(section.getByRole('button', { name: 'Connect' })).toBeVisible()
     await expect(section.getByRole('button', { name: 'Start' })).toBeVisible()
     await expect(section.getByText('Template without Orca', { exact: false })).toBeVisible()
+    await expect(section.getByRole('button', { name: 'Resume' })).toBeVisible()
     await section.screenshot({ path: test.info().outputPath('hangar-signed-in.png') })
+
+    // hangar refuses stop on a suspended machine, so its menu must not offer it.
+    await section.getByRole('button', { name: 'More machine actions' }).nth(2).click()
+    await expect(orcaPage.getByRole('menuitem', { name: 'Delete…' })).toBeVisible()
+    await expect(orcaPage.getByRole('menuitem', { name: 'Stop' })).toHaveCount(0)
+    await orcaPage.keyboard.press('Escape')
+    await section.getByRole('button', { name: 'More machine actions' }).first().click()
+    await expect(orcaPage.getByRole('menuitem', { name: 'Stop' })).toBeVisible()
+    await expect(orcaPage.getByRole('menuitem', { name: 'Suspend' })).toBeVisible()
+    await orcaPage.keyboard.press('Escape')
 
     await section.getByRole('button', { name: 'New machine' }).click()
     await expect(section.getByRole('button', { name: 'Create machine' })).toBeDisabled()

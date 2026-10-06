@@ -93,6 +93,22 @@ export type HangarOrcaConnection = z.infer<typeof HangarOrcaConnectionSchema>
 export const HANGAR_ORCA_CAPABILITY = 'orca'
 export type HangarMachineAction = 'start' | 'stop' | 'suspend' | 'resume'
 
+// Mirrors hangar-server's lifecycle transitions (internal/server/machines.go); anything else is a 409.
+export function hangarMachineActions(state: string): HangarMachineAction[] {
+  switch (state) {
+    case 'running':
+      return ['suspend', 'stop']
+    case 'suspended':
+      return ['resume']
+    case 'stopped':
+      return ['start']
+    case 'error':
+      return ['stop']
+    default:
+      return []
+  }
+}
+
 export type HangarCreateMachineRequest = {
   name: string
   templateId: string
