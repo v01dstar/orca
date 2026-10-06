@@ -66,7 +66,9 @@ class HangarLazyWebSocket {
     let endpoint: string
     try {
       // Why dynamic: the session pulls in react-native; transport code and its tests must not.
-      const { hangarClient } = await import('./hangar-mobile-session')
+      const { hangarClient, loadHangarSession } = await import('./hangar-mobile-session')
+      // Why: after an app restart nothing else may have read the stored session yet.
+      await loadHangarSession()
       endpoint = (await hangarClient().createOrcaConnection(machineId, 'mobile')).endpoint
     } catch (error) {
       if (!this.closedEarly) {
