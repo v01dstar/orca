@@ -4,6 +4,7 @@ import { z } from 'zod'
 import {
   HangarDeviceStartSchema,
   HangarErrorSchema,
+  HangarImageSchema,
   HangarMachineSchema,
   HangarMeSchema,
   HangarOperationSchema,
@@ -12,6 +13,7 @@ import {
   HangarTokensSchema,
   type HangarCreateMachineRequest,
   type HangarDeviceStart,
+  type HangarImage,
   type HangarMachine,
   type HangarMachineAction,
   type HangarMe,
@@ -23,6 +25,7 @@ import {
 
 const MachineListSchema = z.object({ machines: HangarMachineSchema.array() })
 const TemplateListSchema = z.object({ templates: HangarTemplateSchema.array() })
+const ImageListSchema = z.object({ images: HangarImageSchema.array() })
 const REQUEST_TIMEOUT_MS = 30_000
 const OPERATION_POLL_MS = 1_000
 
@@ -160,6 +163,14 @@ export function createHangarApiClient(options: HangarApiClientOptions) {
       mutate(HangarOperationSchema, `/v1/machines/${encodeURIComponent(id)}/${action}`, {
         method: 'POST',
         body: {}
+      }),
+    listImages: async (): Promise<HangarImage[]> =>
+      (await request(ImageListSchema, '/v1/images')).images,
+    // The machine must be stopped; saves its root disk and /data (including HOME credentials).
+    createImage: (machineId: string, name: string): Promise<HangarImage> =>
+      mutate(HangarImageSchema, `/v1/machines/${encodeURIComponent(machineId)}/images`, {
+        method: 'POST',
+        body: { name }
       }),
     deleteMachine: (id: string): Promise<HangarOperation> =>
       mutate(HangarOperationSchema, `/v1/machines/${encodeURIComponent(id)}`, {

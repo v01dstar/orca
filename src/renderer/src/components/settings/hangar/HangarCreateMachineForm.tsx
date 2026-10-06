@@ -2,6 +2,7 @@ import { Loader2 } from 'lucide-react'
 import { useState } from 'react'
 import {
   hangarOrcaTemplates,
+  isValidHangarName,
   type HangarCreateMachineRequest,
   type HangarTemplate
 } from '../../../../../shared/hangar/hangar-api-types'
@@ -28,8 +29,7 @@ export function HangarCreateMachineForm({
   const orcaTemplates = hangarOrcaTemplates(templates)
   const [name, setName] = useState('')
   const [templateId, setTemplateId] = useState(orcaTemplates[0]?.id ?? '')
-  // Same rule as hangar's machine names (internal/server/machines.go nameRE).
-  const validName = /^[a-z0-9][a-z0-9-]{0,62}$/.test(name)
+  const validName = isValidHangarName(name)
 
   return (
     <form

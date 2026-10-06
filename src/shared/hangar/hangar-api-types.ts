@@ -120,10 +120,41 @@ export function hangarMachineActions(state: string): HangarMachineAction[] {
   }
 }
 
+// A saved copy of a stopped machine's disks (no RAM); new machines can be created from it.
+export const HangarImageSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  template: z.object({ id: z.string(), version: z.string() }),
+  official: z.boolean(),
+  owned: z.boolean(),
+  createdAt: z.string()
+})
+export type HangarImage = z.infer<typeof HangarImageSchema>
+
+// An image runs an Orca runtime when the template version it was saved from does.
+export function hangarOrcaImages(
+  images: readonly HangarImage[],
+  templates: readonly HangarTemplate[]
+): HangarImage[] {
+  return images.filter((image) =>
+    templates.some(
+      (t) =>
+        t.id === image.template.id &&
+        t.version === image.template.version &&
+        (t.capabilities ?? []).includes(HANGAR_ORCA_CAPABILITY)
+    )
+  )
+}
+
+// hangar's rule for machine and image names (internal/server/machines.go nameRE).
+export function isValidHangarName(name: string): boolean {
+  return /^[a-z0-9][a-z0-9-]{0,62}$/.test(name)
+}
+
+// Exactly one of templateId and imageId.
 export type HangarCreateMachineRequest = {
   name: string
-  templateId: string
   vcpus?: number
   memMiB?: number
   persistentDiskGiB?: number
-}
+} & ({ templateId: string; imageId?: never } | { imageId: string; templateId?: never })
