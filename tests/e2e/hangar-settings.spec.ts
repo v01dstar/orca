@@ -21,8 +21,18 @@ const machine = (id: string, name: string, state: string, template = 'orca') => 
 })
 const spec = { vcpus: 4, memMiB: 8192, persistentDiskGiB: 20 }
 
-// A fake hangar: just enough of its API for sign-in and the machine list.
-async function startFakeHangar(): Promise<{ url: string; server: Server }> {
+const image = {
+  id: 'im_1',
+  name: 'orca-base',
+  template: { id: 'orca', version: '2026-10-05.1', digest: 'sha256:x' },
+  official: false,
+  owned: true,
+  createdAt: now
+}
+
+// A fake hangar: just enough of its API for sign-in, the machine list and saving an image.
+async function startFakeHangar(): Promise<{ url: string; server: Server; saved: string[] }> {
+  const saved: string[] = []
   const server = createServer((req, res) => {
     const url = new URL(req.url ?? '/', 'http://127.0.0.1')
     const json = (body: unknown): void => {
@@ -49,6 +59,15 @@ async function startFakeHangar(): Promise<{ url: string; server: Server }> {
           { id: 'herdr', version: '2026-10-05.1', defaultSpec: spec, capabilities: [] }
         ]
       })
+    } else if (url.pathname === '/v1/images') {
+      json({ images: [image] })
+    } else if (url.pathname === '/v1/machines/m_2/images' && req.method === 'POST') {
+      let body = ''
+      req.on('data', (chunk) => (body += chunk))
+      req.on('end', () => {
+        saved.push(body)
+        res.writeHead(201, { 'Content-Type': 'application/json' }).end(JSON.stringify(image))
+      })
     } else if (url.pathname === '/v1/machines') {
       json({
         machines: [
@@ -66,7 +85,7 @@ async function startFakeHangar(): Promise<{ url: string; server: Server }> {
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
   const address = server.address()
   const port = typeof address === 'object' && address ? address.port : 0
-  return { url: `http://127.0.0.1:${port}`, server }
+  return { url: `http://127.0.0.1:${port}`, server, saved }
 }
 
 async function openCloudVmSettings(page: Page): Promise<void> {
@@ -124,10 +143,22 @@ test('signs in to hangar and lists machines with their Orca actions', async ({
     await expect(orcaPage.getByRole('menuitem', { name: 'Suspend' })).toBeVisible()
     await orcaPage.keyboard.press('Escape')
 
+    // A stopped machine can be saved as an image; the name defaults to `<machine>-image`.
+    await section.getByRole('button', { name: 'More machine actions' }).nth(1).click()
+    await orcaPage.getByRole('menuitem', { name: 'Save as image…' }).click()
+    const imageName = orcaPage.getByRole('textbox', { name: 'Image name' })
+    await expect(imageName).toHaveValue('orca-idle-image')
+    await orcaPage.getByRole('button', { name: 'Save image' }).click()
+    await expect.poll(() => hangar.saved).toEqual([JSON.stringify({ name: 'orca-idle-image' })])
+
     await section.getByRole('button', { name: 'New machine' }).click()
     await expect(section.getByRole('button', { name: 'Create machine' })).toBeDisabled()
     await section.getByRole('textbox', { name: 'Machine name' }).fill('new-box')
     await expect(section.getByRole('button', { name: 'Create machine' })).toBeEnabled()
+    // The source picker offers saved images next to templates.
+    await section.getByRole('combobox', { name: 'Template' }).click()
+    await expect(orcaPage.getByRole('option', { name: 'orca-base' })).toBeVisible()
+    await orcaPage.getByRole('option', { name: 'orca-base' }).click()
     await section.screenshot({ path: test.info().outputPath('hangar-create.png') })
 
     await section.getByRole('button', { name: 'Sign out' }).click()

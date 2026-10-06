@@ -48,6 +48,8 @@ function busyLabel(busy: HangarMachineBusy): string {
       return translate(`${NS}.deleting`, 'Deleting…')
     case 'connect':
       return translate(`${NS}.connecting`, 'Connecting…')
+    case 'saveImage':
+      return translate(`${NS}.savingImage`, 'Saving image…')
   }
 }
 
@@ -57,6 +59,7 @@ type HangarMachineRowProps = {
   disabled: boolean
   onAction: (action: HangarMachineAction) => void
   onConnect: () => void
+  onSaveImage: () => void
   onDelete: () => void
 }
 
@@ -66,6 +69,7 @@ export function HangarMachineRow({
   disabled,
   onAction,
   onConnect,
+  onSaveImage,
   onDelete
 }: HangarMachineRowProps): React.JSX.Element {
   const { machine, orcaCapable, environmentId } = entry
@@ -149,6 +153,12 @@ export function HangarMachineRow({
             {running && orcaCapable && environmentId ? (
               <DropdownMenuItem onSelect={onConnect}>
                 {translate(`${NS}.reconnect`, 'Re-enroll in Orca')}
+              </DropdownMenuItem>
+            ) : null}
+            {/* hangar saves images only from stopped machines (disks, not RAM). */}
+            {machine.state === 'stopped' ? (
+              <DropdownMenuItem onSelect={onSaveImage}>
+                {translate(`${NS}.saveImage`, 'Save as image…')}
               </DropdownMenuItem>
             ) : null}
             <DropdownMenuSeparator />

@@ -1,5 +1,5 @@
 // Shapes the hangar IPC (main/ipc/hangar.ts) shares with preload and the renderer.
-import type { HangarMachine, HangarTemplate } from './hangar-api-types'
+import type { HangarImage, HangarMachine, HangarTemplate } from './hangar-api-types'
 
 export const HANGAR_STATE_CHANGED_CHANNEL = 'hangar:stateChanged'
 export const HANGAR_ENVIRONMENTS_CHANGED_CHANNEL = 'hangar:environmentsChanged'
@@ -20,4 +20,6 @@ export type HangarMachineEntry = {
 export type HangarMachinesSnapshot = {
   machines: HangarMachineEntry[]
   templates: HangarTemplate[]
+  // Images saved from an Orca-capable template version (new machines can be created from them).
+  images: HangarImage[]
 }

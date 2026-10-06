@@ -4,17 +4,28 @@ import {
   hangarOrcaTemplates,
   isValidHangarName,
   type HangarCreateMachineRequest,
+  type HangarImage,
   type HangarTemplate
 } from '../../../../../shared/hangar/hangar-api-types'
 import { translate } from '@/i18n/i18n'
 import { Button } from '../../ui/button'
 import { Input } from '../../ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select'
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue
+} from '../../ui/select'
 
 const NS = 'auto.components.settings.hangar.HangarCreateMachineForm'
 
 type HangarCreateMachineFormProps = {
   templates: readonly HangarTemplate[]
+  // Orca-capable images (saved stopped machines) a machine can also be created from.
+  images: readonly HangarImage[]
   creating: boolean
   onCancel: () => void
   onCreate: (request: HangarCreateMachineRequest) => void
@@ -22,22 +33,33 @@ type HangarCreateMachineFormProps = {
 
 export function HangarCreateMachineForm({
   templates,
+  images,
   creating,
   onCancel,
   onCreate
 }: HangarCreateMachineFormProps): React.JSX.Element {
   const orcaTemplates = hangarOrcaTemplates(templates)
   const [name, setName] = useState('')
-  const [templateId, setTemplateId] = useState(orcaTemplates[0]?.id ?? '')
+  // `template:<id>` or `image:<id>`: one Select picks either source.
+  const [source, setSource] = useState(orcaTemplates[0] ? `template:${orcaTemplates[0].id}` : '')
   const validName = isValidHangarName(name)
+  const request = (): HangarCreateMachineRequest | null => {
+    const separator = source.indexOf(':')
+    const id = source.slice(separator + 1)
+    if (!validName || separator === -1 || !id) {
+      return null
+    }
+    return source.startsWith('image:') ? { name, imageId: id } : { name, templateId: id }
+  }
 
   return (
     <form
       className="flex items-center gap-2"
       onSubmit={(event) => {
         event.preventDefault()
-        if (validName && templateId) {
-          onCreate({ name, templateId })
+        const next = request()
+        if (next) {
+          onCreate(next)
         }
       }}
     >
@@ -51,7 +73,7 @@ export function HangarCreateMachineForm({
         aria-invalid={name.length > 0 && !validName}
         disabled={creating}
       />
-      <Select value={templateId} onValueChange={setTemplateId} disabled={creating}>
+      <Select value={source} onValueChange={setSource} disabled={creating}>
         <SelectTrigger
           size="sm"
           className="w-40"
@@ -60,22 +82,30 @@ export function HangarCreateMachineForm({
           <SelectValue placeholder={translate(`${NS}.noTemplate`, 'No Orca template')} />
         </SelectTrigger>
         <SelectContent>
-          {orcaTemplates.map((template) => (
-            <SelectItem key={template.id} value={template.id}>
-              {template.id}
-            </SelectItem>
-          ))}
+          <SelectGroup>
+            <SelectLabel>{translate(`${NS}.templates`, 'Templates')}</SelectLabel>
+            {orcaTemplates.map((template) => (
+              <SelectItem key={template.id} value={`template:${template.id}`}>
+                {template.id}
+              </SelectItem>
+            ))}
+          </SelectGroup>
+          {images.length > 0 ? (
+            <SelectGroup>
+              <SelectLabel>{translate(`${NS}.images`, 'Images')}</SelectLabel>
+              {images.map((image) => (
+                <SelectItem key={image.id} value={`image:${image.id}`}>
+                  {image.name}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          ) : null}
         </SelectContent>
       </Select>
       <Button type="button" variant="ghost" size="sm" onClick={onCancel} disabled={creating}>
         {translate(`${NS}.cancel`, 'Cancel')}
       </Button>
-      <Button
-        type="submit"
-        size="sm"
-        className="w-36"
-        disabled={creating || !validName || !templateId}
-      >
+      <Button type="submit" size="sm" className="w-36" disabled={creating || request() === null}>
         {creating ? <Loader2 className="animate-spin" /> : null}
         {creating
           ? translate(`${NS}.creating`, 'Creating machine…')
