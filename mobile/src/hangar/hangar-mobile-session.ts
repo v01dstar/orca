@@ -31,7 +31,8 @@ const StoredSessionSchema = z.object({
 })
 
 let session: HangarStoredSession | null = null
-let loaded: Promise<HangarStoredSession | null> | null = null
+let sessionChanged = false
+let loaded: Promise<void> | null = null
 const listeners = new Set<(session: HangarStoredSession | null) => void>()
 
 // Why: Hermes has no crypto.getRandomValues; expo-crypto provides the secure RNG.
@@ -58,21 +59,24 @@ async function writeStored(value: string | null): Promise<void> {
 
 function setSession(next: HangarStoredSession | null): void {
   session = next
+  sessionChanged = true
   void writeStored(next ? JSON.stringify(next) : null).catch(() => undefined)
   for (const listener of listeners) {
     listener(next)
   }
 }
 
+// Why: reads storage once, then answers from memory — a sign-in after that first read must count.
 export function loadHangarSession(): Promise<HangarStoredSession | null> {
   loaded ??= readStored()
     .then((raw) => {
       const parsed = StoredSessionSchema.safeParse(raw ? JSON.parse(raw) : null)
-      session = parsed.success ? parsed.data : null
-      return session
+      if (!sessionChanged) {
+        session = parsed.success ? parsed.data : null
+      }
     })
-    .catch(() => null)
-  return loaded
+    .catch(() => undefined)
+  return loaded.then(() => session)
 }
 
 export function onHangarSessionChange(
