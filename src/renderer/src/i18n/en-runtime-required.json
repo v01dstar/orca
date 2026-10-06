@@ -1727,10 +1727,12 @@
             "cancel": "Cancel",
             "create": "Create machine",
             "creating": "Creating machine…",
+            "images": "Images",
             "name": "Machine name",
             "namePlaceholder": "machine-name",
             "noTemplate": "No Orca template",
-            "template": "Template"
+            "template": "Template",
+            "templates": "Templates"
           },
           "HangarDeleteMachineDialog": {
             "cancel": "Cancel",
@@ -1751,6 +1753,8 @@
             "resume": "Resume",
             "resuming": "Resuming…",
             "running": "Running",
+            "saveImage": "Save as image…",
+            "savingImage": "Saving image…",
             "start": "Start",
             "starting": "Starting…",
             "stop": "Stop",
@@ -1772,6 +1776,13 @@
             "signOut": "Sign out",
             "title": "hangar machines",
             "waitingForBrowser": "Waiting for browser sign-in…"
+          },
+          "HangarSaveImageDialog": {
+            "cancel": "Cancel",
+            "description": "Saves the root and /data disks, including anything signed in under the home directory. Memory and running processes are not saved. New machines can be created from the image.",
+            "name": "Image name",
+            "save": "Save image",
+            "title": "Save machine as image"
           }
         },
         "integrations": {

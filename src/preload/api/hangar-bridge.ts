@@ -13,6 +13,7 @@ export const hangarApi: HangarApi = {
   listMachines: () => ipcRenderer.invoke('hangar:listMachines'),
   createMachine: (args) => ipcRenderer.invoke('hangar:createMachine', args),
   machineAction: (args) => ipcRenderer.invoke('hangar:machineAction', args),
+  saveImage: (args) => ipcRenderer.invoke('hangar:saveImage', args),
   deleteMachine: (args) => ipcRenderer.invoke('hangar:deleteMachine', args),
   connectMachine: (args) => ipcRenderer.invoke('hangar:connectMachine', args),
   onStateChanged: (callback) => {

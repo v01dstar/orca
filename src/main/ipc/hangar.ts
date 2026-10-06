@@ -2,7 +2,9 @@
 import { app, BrowserWindow, ipcMain } from 'electron'
 import {
   HANGAR_ORCA_CAPABILITY,
+  hangarOrcaImages,
   type HangarCreateMachineRequest,
+  type HangarImage,
   type HangarMachine,
   type HangarMachineAction,
   type HangarTemplate
@@ -78,7 +80,11 @@ export async function registerHangarHandlers(): Promise<void> {
   ipcMain.removeHandler('hangar:listMachines')
   ipcMain.handle('hangar:listMachines', async (): Promise<HangarMachinesSnapshot> => {
     const client = account.client()
-    const [machines, templates] = await Promise.all([client.listMachines(), client.templates()])
+    const [machines, templates, images] = await Promise.all([
+      client.listMachines(),
+      client.templates(),
+      client.listImages()
+    ])
     const links = envs.links()
     return {
       machines: machines.map((machine) => ({
@@ -86,7 +92,8 @@ export async function registerHangarHandlers(): Promise<void> {
         orcaCapable: supportsOrca(templates, machine),
         environmentId: links.find((link) => link.machineId === machine.id)?.environmentId ?? null
       })),
-      templates
+      templates,
+      images: hangarOrcaImages(images, templates)
     }
   })
 
@@ -117,6 +124,13 @@ export async function registerHangarHandlers(): Promise<void> {
       broadcast(HANGAR_ENVIRONMENTS_CHANGED_CHANNEL)
       return machine
     }
+  )
+
+  ipcMain.removeHandler('hangar:saveImage')
+  ipcMain.handle(
+    'hangar:saveImage',
+    (_event, args: { machineId: string; name: string }): Promise<HangarImage> =>
+      account.client().createImage(args.machineId, args.name)
   )
 
   ipcMain.removeHandler('hangar:deleteMachine')

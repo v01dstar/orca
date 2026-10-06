@@ -1,5 +1,6 @@
 import type {
   HangarCreateMachineRequest,
+  HangarImage,
   HangarMachine,
   HangarMachineAction
 } from '../../shared/hangar/hangar-api-types'
@@ -16,6 +17,8 @@ export type HangarApi = {
     machineId: string
     action: HangarMachineAction
   }) => Promise<HangarMachine>
+  // The machine must be stopped; saves its root disk and /data (not RAM).
+  saveImage: (args: { machineId: string; name: string }) => Promise<HangarImage>
   deleteMachine: (args: { machineId: string }) => Promise<void>
   connectMachine: (args: { machineId: string }) => Promise<PublicKnownRuntimeEnvironment>
   onStateChanged: (callback: (state: HangarAccountState) => void) => () => void

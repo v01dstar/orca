@@ -12,7 +12,7 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
 
 // What a row is doing right now; drives its stage label (operations take seconds to a minute).
-export type HangarMachineBusy = HangarMachineAction | 'delete' | 'connect'
+export type HangarMachineBusy = HangarMachineAction | 'delete' | 'connect' | 'saveImage'
 
 async function refreshRuntimeEnvironments(): Promise<void> {
   useAppStore.getState().setRuntimeEnvironments(await window.api.runtimeEnvironments.list())
@@ -138,6 +138,8 @@ export function useHangarMachines(active: boolean) {
       runForMachine(machineId, action, () =>
         window.api.hangar.machineAction({ machineId, action })
       ),
+    saveImage: (machineId: string, name: string) =>
+      runForMachine(machineId, 'saveImage', () => window.api.hangar.saveImage({ machineId, name })),
     deleteMachine: (machineId: string) =>
       runForMachine(machineId, 'delete', () => window.api.hangar.deleteMachine({ machineId })),
     connectMachine: (machineId: string) =>

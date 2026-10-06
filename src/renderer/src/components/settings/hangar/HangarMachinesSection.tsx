@@ -7,6 +7,7 @@ import { Input } from '../../ui/input'
 import { HangarCreateMachineForm } from './HangarCreateMachineForm'
 import { HangarDeleteMachineDialog } from './HangarDeleteMachineDialog'
 import { HangarMachineRow } from './HangarMachineRow'
+import { HangarSaveImageDialog } from './HangarSaveImageDialog'
 import { useHangarMachines } from './use-hangar-machines'
 
 const NS = 'auto.components.settings.hangar.HangarMachinesSection'
@@ -21,6 +22,7 @@ function HangarMachinesPanel({ active }: { active: boolean }): React.JSX.Element
   const [serverUrl, setServerUrl] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
   const [pendingDelete, setPendingDelete] = useState<HangarMachineEntry | null>(null)
+  const [pendingImage, setPendingImage] = useState<HangarMachineEntry | null>(null)
   const account = hangar.account
   const machines = hangar.snapshot?.machines ?? []
 
@@ -109,6 +111,7 @@ function HangarMachinesPanel({ active }: { active: boolean }): React.JSX.Element
                   disabled={hangar.isLoading}
                   onAction={(action) => void hangar.machineAction(entry.machine.id, action)}
                   onConnect={() => void hangar.connectMachine(entry.machine.id)}
+                  onSaveImage={() => setPendingImage(entry)}
                   onDelete={() => setPendingDelete(entry)}
                 />
               ))}
@@ -118,6 +121,7 @@ function HangarMachinesPanel({ active }: { active: boolean }): React.JSX.Element
             {createOpen ? (
               <HangarCreateMachineForm
                 templates={hangar.snapshot?.templates ?? []}
+                images={hangar.snapshot?.images ?? []}
                 creating={hangar.creating}
                 onCancel={() => setCreateOpen(false)}
                 onCreate={async (request) => {
@@ -136,6 +140,16 @@ function HangarMachinesPanel({ active }: { active: boolean }): React.JSX.Element
         </div>
       ) : null}
 
+      <HangarSaveImageDialog
+        entry={pendingImage}
+        onCancel={() => setPendingImage(null)}
+        onSave={(name) => {
+          if (pendingImage) {
+            void hangar.saveImage(pendingImage.machine.id, name)
+          }
+          setPendingImage(null)
+        }}
+      />
       <HangarDeleteMachineDialog
         entry={pendingDelete}
         onCancel={() => setPendingDelete(null)}
