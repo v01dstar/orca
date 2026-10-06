@@ -5,7 +5,7 @@ import { HangarMachineRow } from './hangar-machine-row'
 import type { useHangarMachines } from './use-hangar-machines'
 
 type AlertButton = { text: string; style?: string; onPress?: () => void }
-const alerts = vi.hoisted(() => [] as { title: string; buttons: AlertButton[] }[])
+const alerts = vi.hoisted(() => new Array<{ title: string; buttons: AlertButton[] }>())
 vi.mock('react-native', async () => {
   const React = await import('react')
   return {

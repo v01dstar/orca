@@ -3,7 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { HangarDeviceCode } from './hangar-device-code'
 
-const mocks = vi.hoisted(() => ({ copied: [] as string[], opened: [] as string[] }))
+const mocks = vi.hoisted(() => ({ copied: new Array<string>(), opened: new Array<string>() }))
 vi.mock('expo-clipboard', () => ({
   setStringAsync: async (value: string) => {
     mocks.copied.push(value)
