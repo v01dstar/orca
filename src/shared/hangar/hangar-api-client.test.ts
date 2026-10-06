@@ -95,3 +95,32 @@ describe('createHangarApiClient', () => {
     await expect(client.listMachines()).rejects.toMatchObject({ code: 'unauthenticated' })
   })
 })
+
+describe('hangar images', () => {
+  const image = {
+    id: 'im_1',
+    name: 'orca-base',
+    template: { id: 'orca', version: '2026-10-05.1', digest: 'sha256:x' },
+    official: false,
+    owned: true,
+    createdAt: '2026-10-06T00:00:00Z'
+  }
+
+  it('lists images and saves a stopped machine as one', async () => {
+    const { calls, fetchImpl } = fakeFetch([json(200, { images: [image] }), json(201, image)])
+    const client = createHangarApiClient({
+      baseUrl: 'https://h.test',
+      getAccessToken: async () => 't',
+      fetchImpl
+    })
+
+    expect((await client.listImages()).map((i) => i.name)).toEqual(['orca-base'])
+    expect(await client.createImage('m_1', 'orca-base')).toMatchObject({ id: 'im_1' })
+    expect(calls.map((c) => c.url)).toEqual([
+      'https://h.test/v1/images',
+      'https://h.test/v1/machines/m_1/images'
+    ])
+    expect(JSON.parse(String(calls[1]?.init.body))).toEqual({ name: 'orca-base' })
+    expect(header(calls[1], 'Idempotency-Key')).toBeTruthy()
+  })
+})
