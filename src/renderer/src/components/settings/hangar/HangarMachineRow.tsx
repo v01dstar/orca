@@ -1,5 +1,8 @@
 import { Loader2, MoreHorizontal } from 'lucide-react'
-import type { HangarMachineAction } from '../../../../../shared/hangar/hangar-api-types'
+import {
+  hangarMachineActions,
+  type HangarMachineAction
+} from '../../../../../shared/hangar/hangar-api-types'
 import type { HangarMachineEntry } from '../../../../../shared/hangar/hangar-ipc'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
@@ -67,14 +70,14 @@ export function HangarMachineRow({
 }: HangarMachineRowProps): React.JSX.Element {
   const { machine, orcaCapable, environmentId } = entry
   const running = machine.state === 'running'
-  const primary: { label: string; run: () => void } | null =
-    machine.state === 'stopped' || machine.state === 'error'
-      ? { label: translate(`${NS}.start`, 'Start'), run: () => onAction('start') }
-      : machine.state === 'suspended'
-        ? { label: translate(`${NS}.resume`, 'Resume'), run: () => onAction('resume') }
-        : running && orcaCapable && !environmentId
-          ? { label: translate(`${NS}.connect`, 'Connect'), run: onConnect }
-          : null
+  const actions = hangarMachineActions(machine.state)
+  const primary: { label: string; run: () => void } | null = actions.includes('start')
+    ? { label: translate(`${NS}.start`, 'Start'), run: () => onAction('start') }
+    : actions.includes('resume')
+      ? { label: translate(`${NS}.resume`, 'Resume'), run: () => onAction('resume') }
+      : running && orcaCapable && !environmentId
+        ? { label: translate(`${NS}.connect`, 'Connect'), run: onConnect }
+        : null
   const spec = `${machine.spec.vcpus} vCPU · ${Math.round(machine.spec.memMiB / 1024)} GiB`
   return (
     <div className="flex items-center gap-3 px-4 py-3">
@@ -133,12 +136,12 @@ export function HangarMachineRow({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            {running ? (
+            {actions.includes('suspend') ? (
               <DropdownMenuItem onSelect={() => onAction('suspend')}>
                 {translate(`${NS}.suspend`, 'Suspend')}
               </DropdownMenuItem>
             ) : null}
-            {running || machine.state === 'suspended' ? (
+            {actions.includes('stop') ? (
               <DropdownMenuItem onSelect={() => onAction('stop')}>
                 {translate(`${NS}.stop`, 'Stop')}
               </DropdownMenuItem>

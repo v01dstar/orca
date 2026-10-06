@@ -12,6 +12,7 @@ import {
 import { useRouter } from 'expo-router'
 import { MobileSettingsFrame } from '../settings/mobile-settings-menu'
 import { colors, spacing, typography } from '../theme/mobile-theme'
+import { hangarMachineActions } from '../../../src/shared/hangar/hangar-api-types'
 import { useHangarMachines, type HangarMachineRowModel } from './use-hangar-machines'
 
 function Button({
@@ -54,6 +55,7 @@ function MachineRow({
 }) {
   const { machine, orcaCapable, hostId } = row
   const state = machine.state
+  const actions = hangarMachineActions(state)
   return (
     <View style={styles.machine}>
       <View style={styles.machineHeader}>
@@ -69,22 +71,22 @@ function MachineRow({
         <ActivityIndicator style={styles.spinner} color={colors.textSecondary} />
       ) : (
         <View style={styles.actions}>
-          {(state === 'stopped' || state === 'error') && (
+          {actions.includes('start') && (
             <Button label="Start" onPress={() => void hangar.act(machine, 'start', 'Starting…')} />
           )}
-          {state === 'suspended' && (
+          {actions.includes('resume') && (
             <Button
               label="Resume"
               onPress={() => void hangar.act(machine, 'resume', 'Resuming…')}
             />
           )}
-          {state === 'running' && (
+          {actions.includes('suspend') && (
             <Button
               label="Suspend"
               onPress={() => void hangar.act(machine, 'suspend', 'Suspending…')}
             />
           )}
-          {(state === 'running' || state === 'suspended') && (
+          {actions.includes('stop') && (
             <Button label="Stop" onPress={() => void hangar.act(machine, 'stop', 'Stopping…')} />
           )}
           {state === 'running' &&
