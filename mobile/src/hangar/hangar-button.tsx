@@ -7,6 +7,7 @@ export function HangarButton({
   primary,
   disabled,
   selected,
+  destructive,
   accessibilityLabel
 }: {
   label: string
@@ -14,6 +15,7 @@ export function HangarButton({
   primary?: boolean
   disabled?: boolean
   selected?: boolean
+  destructive?: boolean
   accessibilityLabel?: string
 }) {
   return (
@@ -29,7 +31,13 @@ export function HangarButton({
         (pressed || disabled) && styles.buttonDim
       ]}
     >
-      <Text style={[styles.buttonText, (primary || selected) && styles.buttonTextPrimary]}>
+      <Text
+        style={[
+          styles.buttonText,
+          (primary || selected) && styles.buttonTextPrimary,
+          destructive && styles.buttonTextDestructive
+        ]}
+      >
         {label}
       </Text>
     </Pressable>
@@ -58,5 +66,6 @@ const styles = StyleSheet.create({
   buttonPrimary: { backgroundColor: colors.surfaceBright },
   buttonDim: { opacity: 0.6 },
   buttonText: { color: colors.textPrimary, fontWeight: '600' },
-  buttonTextPrimary: { color: colors.bgBase }
+  buttonTextPrimary: { color: colors.bgBase },
+  buttonTextDestructive: { color: colors.statusRed }
 })
