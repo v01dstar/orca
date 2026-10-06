@@ -1,7 +1,7 @@
 import { Loader2 } from 'lucide-react'
 import { useState } from 'react'
 import {
-  HANGAR_ORCA_CAPABILITY,
+  hangarOrcaTemplates,
   type HangarCreateMachineRequest,
   type HangarTemplate
 } from '../../../../../shared/hangar/hangar-api-types'
@@ -25,14 +25,7 @@ export function HangarCreateMachineForm({
   onCancel,
   onCreate
 }: HangarCreateMachineFormProps): React.JSX.Element {
-  // Why: only templates that run an Orca runtime can become Orca hosts.
-  const orcaTemplates = [
-    ...new Map(
-      templates
-        .filter((template) => (template.capabilities ?? []).includes(HANGAR_ORCA_CAPABILITY))
-        .map((template) => [template.id, template])
-    ).values()
-  ]
+  const orcaTemplates = hangarOrcaTemplates(templates)
   const [name, setName] = useState('')
   const [templateId, setTemplateId] = useState(orcaTemplates[0]?.id ?? '')
   // Same rule as hangar's machine names (internal/server/machines.go nameRE).

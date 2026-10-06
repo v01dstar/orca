@@ -12,7 +12,10 @@ import {
 import { useRouter } from 'expo-router'
 import { MobileSettingsFrame } from '../settings/mobile-settings-menu'
 import { colors, spacing, typography } from '../theme/mobile-theme'
-import { hangarMachineActions } from '../../../src/shared/hangar/hangar-api-types'
+import {
+  hangarMachineActions,
+  hangarOrcaTemplates
+} from '../../../src/shared/hangar/hangar-api-types'
 import { useHangarMachines, type HangarMachineRowModel } from './use-hangar-machines'
 
 function Button({
@@ -107,7 +110,7 @@ export function HangarScreen() {
   const hangar = useHangarMachines()
   const [serverUrl, setServerUrl] = useState('https://')
   const [newName, setNewName] = useState('')
-  const templateId = hangar.templates[0]?.id ?? null
+  const templateId = hangarOrcaTemplates(hangar.templates)[0]?.id ?? null
 
   return (
     <MobileSettingsFrame>

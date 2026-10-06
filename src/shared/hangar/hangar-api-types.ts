@@ -93,6 +93,17 @@ export type HangarOrcaConnection = z.infer<typeof HangarOrcaConnectionSchema>
 export const HANGAR_ORCA_CAPABILITY = 'orca'
 export type HangarMachineAction = 'start' | 'stop' | 'suspend' | 'resume'
 
+// Only templates that run an Orca runtime can become Orca hosts; one entry per template id.
+export function hangarOrcaTemplates(templates: readonly HangarTemplate[]): HangarTemplate[] {
+  return [
+    ...new Map(
+      templates
+        .filter((template) => (template.capabilities ?? []).includes(HANGAR_ORCA_CAPABILITY))
+        .map((template) => [template.id, template])
+    ).values()
+  ]
+}
+
 // Mirrors hangar-server's lifecycle transitions (internal/server/machines.go); anything else is a 409.
 export function hangarMachineActions(state: string): HangarMachineAction[] {
   switch (state) {
