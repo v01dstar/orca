@@ -1,8 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const createOrcaConnection = vi.fn()
+const session = vi.hoisted(() => ({ loaded: false }))
 vi.mock('./hangar-mobile-session', () => ({
-  hangarClient: () => ({ createOrcaConnection })
+  // Like the real module: the client needs the stored session read first.
+  loadHangarSession: async () => {
+    session.loaded = true
+  },
+  hangarClient: () => {
+    if (!session.loaded) {
+      throw new Error('Sign in to hangar first.')
+    }
+    return { createOrcaConnection }
+  }
 }))
 
 class FakeWebSocket {
@@ -48,6 +58,8 @@ describe('hangar endpoints', () => {
   })
 
   it('dials a fresh tunnel ticket per socket and relays its events', async () => {
+    // A cold start: no screen has loaded the hangar session before the transport dials.
+    session.loaded = false
     createOrcaConnection.mockResolvedValue({ endpoint: 'wss://h/v1/tunnels/hgt_1' })
     const { createRuntimeWebSocket } = await import('./hangar-lazy-websocket')
     const socket = createRuntimeWebSocket('hangar://h/m_1')
