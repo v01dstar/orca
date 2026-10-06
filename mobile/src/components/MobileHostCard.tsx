@@ -43,7 +43,7 @@ export function MobileHostCard(props: {
   const descriptorText = display.descriptorLine
   const connectionPathLabel =
     !credentialMissing && !credentialUnavailable && connected
-      ? mobileConnectionPathLabel(props.path)
+      ? mobileConnectionPathLabel(props.path, props.host.endpoint)
       : null
   const discoveryHint =
     props.verdict.kind === 'unreachable' && !props.host.relay

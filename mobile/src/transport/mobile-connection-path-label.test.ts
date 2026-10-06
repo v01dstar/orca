@@ -7,4 +7,9 @@ describe('mobile connection path label', () => {
     expect(mobileConnectionPathLabel('tailscale')).toBe('Direct · Tailscale')
     expect(mobileConnectionPathLabel('relay')).toBe('Orca Relay')
   })
+
+  it('names the hangar tunnel instead of the direct path the transport reports', () => {
+    expect(mobileConnectionPathLabel('lan', 'hangar://152.236.1.51/m_1')).toBe('Via hangar')
+    expect(mobileConnectionPathLabel('lan', 'ws://10.0.0.2:6768')).toBe('Direct · LAN')
+  })
 })
