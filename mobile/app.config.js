@@ -11,26 +11,28 @@
 const APS_ENVIRONMENT =
   process.env.ORCA_IOS_APS_ENVIRONMENT === 'production' ? 'production' : 'development'
 
-// Fork: `ORCA_FLAVOR=hangar` builds an app that installs beside the official Orca mobile app.
-const HANGAR_FLAVOR = process.env.ORCA_FLAVOR === 'hangar'
+// Fork: `ORCA_FLAVOR=instabox` builds an app that installs beside the official Orca mobile app.
+const INSTABOX_FLAVOR = process.env.ORCA_FLAVOR === 'instabox'
 
 module.exports = ({ config }) => ({
   ...config,
-  ...(HANGAR_FLAVOR ? { name: 'Orca Hangar', scheme: 'orca-hangar' } : {}),
+  ...(INSTABOX_FLAVOR
+    ? { name: 'Instabox', scheme: 'instabox', extra: { ...config.extra, appFlavor: 'instabox' } }
+    : {}),
   ios: {
     ...config.ios,
-    ...(HANGAR_FLAVOR ? { bundleIdentifier: 'com.v01dstar.orcahangar' } : {}),
+    ...(INSTABOX_FLAVOR ? { bundleIdentifier: 'com.v01dstar.instabox' } : {}),
     entitlements: { ...config.ios?.entitlements, 'aps-environment': APS_ENVIRONMENT }
   },
-  ...(HANGAR_FLAVOR ? { android: { ...config.android, package: 'com.v01dstar.orcahangar' } } : {}),
+  ...(INSTABOX_FLAVOR ? { android: { ...config.android, package: 'com.v01dstar.instabox' } } : {}),
   plugins: [
     ...(config.plugins ?? []).map((plugin) =>
-      HANGAR_FLAVOR && Array.isArray(plugin) && plugin[0] === 'expo-build-properties'
+      INSTABOX_FLAVOR && Array.isArray(plugin) && plugin[0] === 'expo-build-properties'
         ? [plugin[0], { ...plugin[1], ios: { ...plugin[1]?.ios, deploymentTarget: '16.0' } }]
         : plugin
     ),
-    // Fork: hangar builds are made with Xcode 27 (iOS 27 SDK), which requires scene lifecycle.
-    ...(HANGAR_FLAVOR ? ['./plugins/ios-scene-lifecycle.js'] : [])
+    // Fork: instabox builds are made with Xcode 27 (iOS 27 SDK), which requires scene lifecycle.
+    ...(INSTABOX_FLAVOR ? ['./plugins/ios-scene-lifecycle.js'] : [])
   ].map((plugin) =>
     plugin === 'expo-notifications'
       ? [

@@ -5,13 +5,13 @@ import {
   runtimeBrowserUnavailableCause
 } from './runtime-browser-commands-factory'
 import { isBrowserIdentityModeStoreInitialized } from '../browser/browser-identity-mode-store'
-import { isHangarAssertionAuthEnabled } from './rpc/hangar-assertion-auth'
+import { isInstaboxAssertionAuthEnabled } from './rpc/instabox-assertion-auth'
 import type { RuntimeCapability } from '../../shared/protocol-version'
 import {
   BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY,
   BROWSER_HEADLESS_RUNTIME_CAPABILITY,
   BROWSER_IDENTITY_RUNTIME_CAPABILITY,
-  HANGAR_ASSERTION_AUTH_RUNTIME_CAPABILITY,
+  INSTABOX_ASSERTION_AUTH_RUNTIME_CAPABILITY,
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY,
   RUNTIME_CAPABILITIES,
@@ -97,8 +97,8 @@ export class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntimeId {
     if (hasOffscreen || hasHeadlessCommands) {
       capabilities.push(BROWSER_HEADLESS_RUNTIME_CAPABILITY)
     }
-    if (isHangarAssertionAuthEnabled()) {
-      capabilities.push(HANGAR_ASSERTION_AUTH_RUNTIME_CAPABILITY)
+    if (isInstaboxAssertionAuthEnabled()) {
+      capabilities.push(INSTABOX_ASSERTION_AUTH_RUNTIME_CAPABILITY)
     }
     // Why not a static capability: the identity is this host's own process-wide choice, fixed
     // before ready. A host that never initialized the store has no identity to report or change,

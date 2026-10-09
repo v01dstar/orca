@@ -15,8 +15,8 @@ import type {
 } from '../../../shared/mobile-relay-credential-contract'
 import type { RelayDeviceBinding, RelayRevokeOutboxItem } from '../relay/relay-revoke-outbox'
 
-// Fork: the hangar flavor defaults beside the official app's port instead of racing it.
-export const DEFAULT_WS_PORT = getAppFlavor().id === 'hangar' ? 6770 : 6768
+// Fork: the instabox flavor defaults beside the official app's port instead of racing it.
+export const DEFAULT_WS_PORT = getAppFlavor().id === 'instabox' ? 6770 : 6768
 
 // Why: STA-2370 — the WS listener defaults to loopback so a desktop with no paired device is not
 // reachable from the LAN; it widens to all interfaces only on explicit pairing (or `orca serve`).
@@ -52,7 +52,7 @@ export type OrcaRuntimeRpcServerOptions = {
    */
   pinnedBindHost?: string
   webClientRoot?: string
-  // Why: `orca serve --trusted-issuer-file`; enables hangar assertion auth on direct sockets.
+  // Why: `orca serve --trusted-issuer-file`; enables instabox assertion auth on direct sockets.
   trustedIssuerFile?: string
   // Why: test-only overrides for the two constants below; production must not pass these (defaults set by §3.1).
   keepaliveIntervalMs?: number

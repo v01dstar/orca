@@ -41,7 +41,7 @@ import { mainProcessState as state } from './main-process-state'
 import { logStartupMilestone } from './startup-diagnostics'
 import { emitServeBrowserIdentityActionLine } from '../server/serve-stdout-boundary'
 import { getBrowserIdentityModeStatus } from '../browser/browser-identity-mode-store'
-import { enableHangarAssertionAuth } from '../runtime/rpc/hangar-assertion-auth'
+import { enableInstaboxAssertionAuth } from '../runtime/rpc/instabox-assertion-auth'
 
 type RuntimeService = NonNullable<typeof state.runtime>
 
@@ -93,7 +93,7 @@ function installRuntimeRpc(
         }
       : {}),
     webClientRoot: getBundledWebClientRoot(),
-    trustedIssuerFile: enableHangarAssertionAuth(serveOptions?.trustedIssuerFile)
+    trustedIssuerFile: enableInstaboxAssertionAuth(serveOptions?.trustedIssuerFile)
   })
   state.runtimeRpc = runtimeRpc
   registerMobileHandlers(runtimeRpc, {

@@ -77,10 +77,10 @@ describe('orca cli worktree awareness', () => {
   it('passes a trusted issuer file through to the headless server', async () => {
     serveOrcaAppMock.mockResolvedValue(0)
 
-    await main(['serve', '--trusted-issuer-file', '/etc/hangar/orca-trust.json'], '/tmp/repo')
+    await main(['serve', '--trusted-issuer-file', '/etc/instabox/orca-trust.json'], '/tmp/repo')
 
     expect(serveOrcaAppMock).toHaveBeenCalledWith(
-      expect.objectContaining({ trustedIssuerFile: '/etc/hangar/orca-trust.json' })
+      expect.objectContaining({ trustedIssuerFile: '/etc/instabox/orca-trust.json' })
     )
   })
 

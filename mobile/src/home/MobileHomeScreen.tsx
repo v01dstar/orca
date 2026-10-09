@@ -120,7 +120,7 @@ export function MobileHomeScreen() {
           contentMaxWidth={contentMaxWidth}
           isWideLayout={isWideLayout}
           onPairDesktop={() => data.router.push('/pair-scan')}
-          onOpenHangar={() => data.router.push('/hangar')}
+          onOpenInstabox={() => data.router.push('/instabox')}
         />
       ) : (
         <MobileHomeHostList

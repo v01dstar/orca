@@ -3,7 +3,7 @@ import path from 'node:path'
 import type { AppIdentity } from '../../shared/app-identity'
 import { getAppFlavor } from '../../shared/app-flavor'
 
-// Fork: the hangar flavor's name and id, so it gets its own Safe Storage key and Dock identity.
+// Fork: the instabox flavor's name and id, so it gets its own Safe Storage key and Dock identity.
 const BASE_APP_NAME = getAppFlavor().appName
 const BASE_APP_USER_MODEL_ID = getAppFlavor().appId
 const MAX_LABEL_LENGTH = 80

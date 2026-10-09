@@ -61,7 +61,7 @@ const ORCA_POSTHOG_WRITE_KEY_LITERAL =
     ? JSON.stringify(orcaPostHogWriteKey)
     : 'null'
 // Fork: a side-by-side desktop build (src/shared/app-flavor.ts).
-const ORCA_APP_FLAVOR_LITERAL = process.env.ORCA_FLAVOR === 'hangar' ? '"hangar"' : 'null'
+const ORCA_APP_FLAVOR_LITERAL = process.env.ORCA_FLAVOR === 'instabox' ? '"instabox"' : 'null'
 const orcaDiagnosticsTokenUrl = process.env.ORCA_DIAGNOSTICS_TOKEN_URL
 const ORCA_DIAGNOSTICS_TOKEN_URL_LITERAL =
   typeof orcaDiagnosticsTokenUrl === 'string' && orcaDiagnosticsTokenUrl.length > 0

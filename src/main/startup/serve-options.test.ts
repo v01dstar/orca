@@ -165,9 +165,9 @@ describe('getServeOptions', () => {
 
   it('parses an absolute trusted issuer file and rejects a relative one', () => {
     expect(
-      getServeOptions(['/AppRun', '--serve', '--serve-trusted-issuer-file', '/etc/hangar/t.json'])
+      getServeOptions(['/AppRun', '--serve', '--serve-trusted-issuer-file', '/etc/instabox/t.json'])
         .trustedIssuerFile
-    ).toBe('/etc/hangar/t.json')
+    ).toBe('/etc/instabox/t.json')
     expect(
       getServeOptions(normalizeServeModeArgv(['/AppRun', 'serve', '--trusted-issuer-file=/t.json']))
         .trustedIssuerFile

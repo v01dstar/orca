@@ -1722,25 +1722,25 @@
             "f472e97440": "aider"
           }
         },
-        "hangar": {
-          "HangarCreateMachineForm": {
+        "instabox": {
+          "InstaboxCreateMachineForm": {
             "cancel": "Cancel",
             "create": "Create machine",
             "creating": "Creating machine…",
-            "images": "Images",
+            "snapshots": "Snapshots",
             "name": "Machine name",
             "namePlaceholder": "machine-name",
             "noTemplate": "No Orca template",
             "template": "Template",
             "templates": "Templates"
           },
-          "HangarDeleteMachineDialog": {
+          "InstaboxDeleteMachineDialog": {
             "cancel": "Cancel",
             "confirm": "Delete machine",
             "description": "Deletes the machine with its root and /data disks, and every workspace on it. This cannot be undone.",
-            "title": "Delete hangar machine?"
+            "title": "Delete Instabox machine?"
           },
-          "HangarMachineRow": {
+          "InstaboxMachineRow": {
             "connect": "Connect",
             "connected": "Connected in Orca",
             "connecting": "Connecting…",
@@ -1753,8 +1753,8 @@
             "resume": "Resume",
             "resuming": "Resuming…",
             "running": "Running",
-            "saveImage": "Save as image…",
-            "savingImage": "Saving image…",
+            "saveSnapshot": "Save as snapshot…",
+            "savingSnapshot": "Saving snapshot…",
             "start": "Start",
             "starting": "Starting…",
             "stop": "Stop",
@@ -1764,25 +1764,24 @@
             "suspended": "Suspended",
             "suspending": "Suspending…"
           },
-          "HangarMachinesSection": {
-            "description": "Run Orca on your hangar cloud machines. Signing in to hangar is all it takes; nothing is paired.",
-            "empty": "No hangar machines yet.",
-            "loading": "Checking hangar machines…",
+          "InstaboxMachinesSection": {
+            "description": "Run Orca on your Instabox cloud machines. Signing in to Instabox is all it takes; nothing is paired.",
+            "empty": "No Instabox machines yet.",
+            "loading": "Checking Instabox machines…",
             "newMachine": "New machine",
-            "refresh": "Refresh hangar machines",
-            "serverUrl": "hangar server URL",
-            "serverUrlPlaceholder": "https://hangar.example.com",
-            "signIn": "Sign in to hangar",
+            "refresh": "Refresh Instabox machines",
+            "serverUrl": "Instabox server URL",
+            "signIn": "Sign in to Instabox",
             "signOut": "Sign out",
-            "title": "hangar machines",
+            "title": "Instabox machines",
             "waitingForBrowser": "Waiting for browser sign-in…"
           },
-          "HangarSaveImageDialog": {
+          "InstaboxSaveSnapshotDialog": {
             "cancel": "Cancel",
-            "description": "Saves the root and /data disks, including anything signed in under the home directory. Memory and running processes are not saved. New machines can be created from the image.",
-            "name": "Image name",
-            "save": "Save image",
-            "title": "Save machine as image"
+            "description": "Saves the root and /data disks, including anything signed in under the home directory. Memory and running processes are not saved. New machines can be created from the snapshot.",
+            "name": "Snapshot name",
+            "save": "Save snapshot",
+            "title": "Save machine as snapshot"
           }
         },
         "integrations": {
@@ -1958,19 +1957,19 @@
           "noRepos": "Add a Git project under this folder to attach GitHub or GitLab tasks.",
           "sourceProject": "Task Source"
         },
-        "HangarHostMenuItems": {
+        "InstaboxHostMenuItems": {
           "resume": "Resume machine",
-          "resumed": "hangar machine is running.",
-          "resuming": "Resuming hangar machine…",
+          "resumed": "Instabox machine is running.",
+          "resuming": "Resuming Instabox machine…",
           "start": "Start machine",
-          "started": "hangar machine is running.",
-          "starting": "Starting hangar machine…",
+          "started": "Instabox machine is running.",
+          "starting": "Starting Instabox machine…",
           "stop": "Stop machine",
-          "stopped": "hangar machine is stopped.",
-          "stopping": "Stopping hangar machine…",
+          "stopped": "Instabox machine is stopped.",
+          "stopping": "Stopping Instabox machine…",
           "suspend": "Suspend machine",
-          "suspended": "hangar machine is suspended.",
-          "suspending": "Suspending hangar machine…"
+          "suspended": "Instabox machine is suspended.",
+          "suspending": "Suspending Instabox machine…"
         },
         "HostSectionHeaderMenu": {
           "63f36455cc": "Reconnect"

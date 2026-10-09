@@ -2,7 +2,7 @@ const { withAppDelegate, withDangerousMod, withInfoPlist } = require('expo/confi
 const fs = require('node:fs')
 const path = require('node:path')
 
-// Fork (hangar builds): apps linked against the iOS 27 SDK (Xcode 27) must adopt the UIScene
+// Fork (instabox builds): apps linked against the iOS 27 SDK (Xcode 27) must adopt the UIScene
 // lifecycle — UIKit traps at launch otherwise — and Expo SDK 55's template does not yet. The
 // AppDelegate keeps building the React Native factory; a SceneDelegate creates the window and
 // forwards URLs. Pods are raised to iOS 16, the floor Xcode 27 and expo-router build against.

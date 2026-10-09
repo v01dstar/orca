@@ -1,4 +1,4 @@
-import { createRuntimeWebSocket } from '../hangar/hangar-lazy-websocket'
+import { createRuntimeWebSocket } from '../instabox/instabox-lazy-websocket'
 import { isTailscaleEndpoint } from '../../../src/shared/remote-runtime-tailscale-hint'
 
 const HOST_REACHABILITY_TIMEOUT_MS = 4000

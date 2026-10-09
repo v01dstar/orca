@@ -17,8 +17,8 @@ export const PublicRuntimeAccessEndpointSchema = RuntimeAccessEndpointSchema.omi
 
 export type PublicRuntimeAccessEndpoint = z.infer<typeof PublicRuntimeAccessEndpointSchema>
 
-// 'hangar': a hangar machine, linked and kept current by main/hangar (fork).
-export const RuntimeEnvironmentSourceSchema = z.enum(['manual', 'ephemeral-vm', 'hangar'])
+// 'instabox': an instabox machine, linked and kept current by main/instabox (fork).
+export const RuntimeEnvironmentSourceSchema = z.enum(['manual', 'ephemeral-vm', 'instabox'])
 export type RuntimeEnvironmentSource = z.infer<typeof RuntimeEnvironmentSourceSchema>
 
 export const KnownRuntimeEnvironmentSchema = z.object({

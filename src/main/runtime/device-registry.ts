@@ -38,8 +38,9 @@ export type DeviceEntry = {
   // Why: survives a desktop restart so the host can keep pushing without the phone
   // re-registering. Absent on every registry written before background push existed.
   pushRegistration?: MobilePushRegistration
-  // Why: set on rows created for a hangar session (assertion `sid`) instead of by pairing, so
+  // Why: set on rows created for an instabox session (assertion `sid`) instead of by pairing, so
   // presence, push and per-device budgets work the same for clients that never paired.
+  // Persisted name predates the Instabox rename.
   hangarSessionId?: string
 }
 
@@ -66,8 +67,8 @@ function validRelayBinding(value: unknown, deviceId: string): RelayDeviceBinding
 // paying a secure-file rewrite (two synchronous PowerShell ACL spawns on Windows) per connection.
 const LAST_SEEN_FLUSH_DELAY_MS = 250
 const STALE_WRITE_TEMP_AGE_MS = 24 * 60 * 60 * 1000
-// Why: hangar sessions end without telling the runtime, so their rows age out instead.
-const HANGAR_DEVICE_RETENTION_MS = 30 * 24 * 60 * 60 * 1000
+// Why: instabox sessions end without telling the runtime, so their rows age out instead.
+const INSTABOX_DEVICE_RETENTION_MS = 30 * 24 * 60 * 60 * 1000
 
 export class DeviceRegistry {
   private readonly registryPath: string
@@ -106,7 +107,7 @@ export class DeviceRegistry {
       token: randomBytes(24).toString('hex'),
       scope,
       pairedAt: Date.now(),
-      // Why: a hangar row is authenticated as it is created; zero marks an unscanned pairing token.
+      // Why: an instabox row is authenticated as it is created; zero marks an unscanned pairing token.
       lastSeenAt: hangarSessionId ? Date.now() : 0,
       pairingReach,
       ...(hangarSessionId ? { hangarSessionId } : {})
@@ -167,15 +168,15 @@ export class DeviceRegistry {
     return this.createAndPersistDevice(retainedDevices, name, scope, pairingReach)
   }
 
-  /** One row per hangar session and scope, so a client's many sockets share one device. */
-  getOrCreateHangarDevice(sessionId: string, scope: DeviceScope): DeviceEntry {
+  /** One row per instabox session and scope, so a client's many sockets share one device. */
+  getOrCreateInstaboxDevice(sessionId: string, scope: DeviceScope): DeviceEntry {
     const existing = this.devices.find((d) => d.hangarSessionId === sessionId && d.scope === scope)
     if (existing) {
       return existing
     }
-    const cutoff = Date.now() - HANGAR_DEVICE_RETENTION_MS
+    const cutoff = Date.now() - INSTABOX_DEVICE_RETENTION_MS
     const retained = this.devices.filter((d) => !d.hangarSessionId || d.lastSeenAt >= cutoff)
-    const name = scope === 'mobile' ? 'hangar mobile session' : 'hangar desktop session'
+    const name = scope === 'mobile' ? 'instabox mobile session' : 'instabox desktop session'
     return this.createAndPersistDevice(retained, name, scope, 'network', sessionId)
   }
 

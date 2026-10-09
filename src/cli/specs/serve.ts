@@ -23,7 +23,7 @@ export const SERVE_COMMAND_SPECS: CommandSpec[] = [
       'Use --recipe-json with --project-root from VM recipes to print the recipe result JSON and leave the server running.',
       'Use --mobile-pairing to print a mobile-scoped pairing QR/link instead of the default runtime-environment pairing link.',
       'When the web client bundle is available, the server also prints a browser URL with the pairing data embedded.',
-      '--trusted-issuer-file (absolute path) lets clients authenticate with an assertion signed by a key in that file, as on hangar machines; the file may appear after startup.'
+      '--trusted-issuer-file (absolute path) lets clients authenticate with an assertion signed by a key in that file, as on instabox machines; the file may appear after startup.'
     ],
     examples: [
       'orca serve',

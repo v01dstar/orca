@@ -81,12 +81,12 @@ const devChannelRepo = isHourlyChannel
     : isAdhocChannel
       ? 'orca-adhoc'
       : null
-// Fork: `ORCA_FLAVOR=hangar` packages a desktop app that installs beside the official Orca
+// Fork: `ORCA_FLAVOR=instabox` packages a desktop app that installs beside the official Orca
 // (src/shared/app-flavor.ts holds the same names for the code).
-const isHangarFlavor = process.env.ORCA_FLAVOR === 'hangar'
-const appId = isHangarFlavor ? 'com.v01dstar.orca-hangar' : 'com.stablyai.orca'
-const productName = isHangarFlavor ? 'Orca Hangar' : 'Orca'
-const macCliLauncherName = isHangarFlavor ? 'orca-hangar' : 'orca'
+const isInstaboxFlavor = process.env.ORCA_FLAVOR === 'instabox'
+const appId = isInstaboxFlavor ? 'com.v01dstar.instabox' : 'com.stablyai.orca'
+const productName = isInstaboxFlavor ? 'Instabox' : 'Orca'
+const macCliLauncherName = isInstaboxFlavor ? 'instabox-orca' : 'orca'
 const featureWallResources = {
   from: 'resources/onboarding/feature-wall',
   to: 'onboarding/feature-wall'
@@ -188,16 +188,16 @@ const windowsRuntimeResources = existsSync(
 module.exports = {
   appId,
   productName,
-  protocols: [{ name: productName, schemes: [isHangarFlavor ? 'orca-hangar' : 'orca'] }],
+  protocols: [{ name: productName, schemes: [isInstaboxFlavor ? 'instabox' : 'orca'] }],
   toolsets: { appimage: '1.0.3' },
-  ...(devChannelBuildVersion || localBuildVersion || isHangarFlavor
+  ...(devChannelBuildVersion || localBuildVersion || isInstaboxFlavor
     ? {
         extraMetadata: {
           ...(devChannelBuildVersion || localBuildVersion
             ? { version: devChannelBuildVersion || localBuildVersion }
             : {}),
           // Why: Electron derives the packaged userData dir from package.json `name`.
-          ...(isHangarFlavor ? { name: 'orca-hangar' } : {})
+          ...(isInstaboxFlavor ? { name: 'instabox' } : {})
         }
       }
     : {}),
@@ -722,7 +722,7 @@ module.exports = {
   // returns false so electron-builder does not rebuild optional cpu-features.
   npmRebuild: true,
   // Fork flavor: no update feed; the official one would replace this build with the official app.
-  publish: isHangarFlavor
+  publish: isInstaboxFlavor
     ? null
     : {
         provider: 'github',
@@ -750,7 +750,7 @@ function chmodUnixCliLaunchers(resourcesDir, electronPlatformName) {
   if (electronPlatformName === 'win32') {
     return
   }
-  for (const launcherName of ['orca', 'orca-ide', 'orca-hangar']) {
+  for (const launcherName of ['orca', 'orca-ide', 'instabox-orca']) {
     const launcherPath = join(resourcesDir, 'bin', launcherName)
     if (!existsSync(launcherPath)) {
       continue
