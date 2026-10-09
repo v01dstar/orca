@@ -98,9 +98,12 @@ export type InstaboxOrcaConnection = z.infer<typeof InstaboxOrcaConnectionSchema
 export const INSTABOX_ORCA_CAPABILITY = 'orca'
 export type InstaboxMachineAction = 'start' | 'stop' | 'suspend' | 'resume'
 
+export const INSTABOX_ORCA_TEMPLATE_ID = 'orca'
+
 // Only templates that run an Orca runtime can become Orca hosts; one entry per template id.
+// The `orca` template comes first so create forms default to it.
 export function instaboxOrcaTemplates(templates: readonly InstaboxTemplate[]): InstaboxTemplate[] {
-  return [
+  const unique = [
     ...new Map(
       templates
         .filter(
@@ -109,6 +112,10 @@ export function instaboxOrcaTemplates(templates: readonly InstaboxTemplate[]): I
         )
         .map((template) => [template.id, template])
     ).values()
+  ]
+  return [
+    ...unique.filter((t) => t.id === INSTABOX_ORCA_TEMPLATE_ID),
+    ...unique.filter((t) => t.id !== INSTABOX_ORCA_TEMPLATE_ID)
   ]
 }
 
