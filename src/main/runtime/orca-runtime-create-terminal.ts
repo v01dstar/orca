@@ -234,8 +234,9 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
           recordPtySurface(pty, tabId, paneKey, spawnSurfaceClaimSequence(this.graphSequence))
         }
         const handle = pty ? this.issuePtyHandle(pty) : preAllocatedHandle
+        let published = false
         if (pty && !adoptedStablePane && launchOpts.deferMobileSessionPublish !== true) {
-          this.publishPtyBackedMobileSessionTerminal(workspace.id, pty, {
+          published = this.publishPtyBackedMobileSessionTerminal(workspace.id, pty, {
             tabId,
             leafId,
             title: launchOpts.title ?? null,
@@ -268,7 +269,7 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
             console.warn(`[terminal-create] failed to create inactive tab for ${result.id}:`, err)
             warning = dependencies.createTerminalRevealWarning(handle, err)
           }
-        } else if (presentation !== 'background') {
+        } else if (presentation !== 'background' && !this.isHeadlessDiscoverable(published)) {
           warning = dependencies.createTerminalRevealWarning(handle)
         }
         return {

@@ -1,3 +1,4 @@
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-types'
 import { describe, expect, it, vi } from 'vitest'
 import {
   OrcaRuntimeService,
@@ -611,6 +612,23 @@ describe('OrcaRuntimeService', () => {
     })
     expect(created.warning).toContain('could not make it discoverable')
     expect(created.warning).toContain(`orca terminal focus --terminal ${created.handle}`)
+  })
+
+  it('does not warn on headless serve once the terminal reaches the mobile session', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
+
+    const created = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+
+    expect(created.handle).toMatch(/^term_/)
+    expect(created.warning).toBeUndefined()
   })
 
   it('does not warn when background presentation has no renderer notifier', async () => {
