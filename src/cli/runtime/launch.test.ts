@@ -373,7 +373,7 @@ describe('serveOrcaApp', () => {
         port: '6768',
         pairingAddress: '100.64.1.20',
         mobilePairing: true,
-        trustedIssuerFile: '/etc/hangar/orca-trust.json'
+        trustedIssuerFile: '/etc/instabox/orca-trust.json'
       })
     ).resolves.toBe(0)
 
@@ -388,7 +388,7 @@ describe('serveOrcaApp', () => {
         '100.64.1.20',
         '--serve-mobile-pairing',
         '--serve-trusted-issuer-file',
-        '/etc/hangar/orca-trust.json'
+        '/etc/instabox/orca-trust.json'
       ],
       expect.objectContaining({
         cwd: resolve(__dirname, '../../..')

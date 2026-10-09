@@ -84,8 +84,9 @@ export const LINEAR_ISSUE_ATTRIBUTE_FILTER_RUNTIME_CAPABILITY =
   'linear.issue-attribute-filter.v1' as const
 export const JIRA_USER_FIELDS_RUNTIME_CAPABILITY = 'jira.user-fields.v1' as const
 // Why not in RUNTIME_CAPABILITIES: advertised only by `orca serve --trusted-issuer-file`, whose
-// `e2ee_auth` accepts `hangarAssertion` in place of `deviceToken`.
-export const HANGAR_ASSERTION_AUTH_RUNTIME_CAPABILITY = 'auth.hangar-assertion.v1' as const
+// `e2ee_auth` accepts `hangarAssertion` in place of `deviceToken`. Wire names predate the Instabox
+// rename; deployed orca templates still speak them, so they stay.
+export const INSTABOX_ASSERTION_AUTH_RUNTIME_CAPABILITY = 'auth.hangar-assertion.v1' as const
 export const JIRA_USER_FIELDS_UPDATE_REQUIRED_MESSAGE =
   'Creating Jira issues with user fields requires a newer Orca server. Update the server and try again.'
 // Why: signals the host exposes the Agent Session History scanner over RPC

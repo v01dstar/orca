@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils'
 import { SearchableSetting } from './SearchableSetting'
 import { EphemeralVmRuntimesSection } from './EphemeralVmRuntimesSection'
 import { CloudVmSetupGuide } from './CloudVmSetupGuide'
-import { HangarMachinesSection } from './hangar/HangarMachinesSection'
+import { InstaboxMachinesSection } from './instabox/InstaboxMachinesSection'
 import {
   getRuntimeEnvironmentsSearchEntry,
   getWebRuntimeEnvironmentsSearchEntry
@@ -237,7 +237,7 @@ export function RuntimeEnvironmentsPane({
       />
 
       <div className={cn('space-y-5 pt-2', visibleWorkflow !== 'cloud-vm' && 'hidden')}>
-        <HangarMachinesSection active={visibleWorkflow === 'cloud-vm'} />
+        <InstaboxMachinesSection active={visibleWorkflow === 'cloud-vm'} />
         <CloudVmSetupGuide />
         <EphemeralVmRuntimesSection active={visibleWorkflow === 'cloud-vm'} />
       </div>

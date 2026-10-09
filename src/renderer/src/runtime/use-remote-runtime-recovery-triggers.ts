@@ -14,10 +14,10 @@ export function useRemoteRuntimeRecoveryTriggers(): void {
       typeof window.api?.ui?.onSystemResumed === 'function'
         ? window.api.ui.onSystemResumed(advanceRemoteRuntimeRecoveryBackoffs)
         : null
-    // Why (fork): a hangar machine started, resumed or re-enrolled; refresh hosts and reconnect now.
-    const unsubscribeHangar =
-      window.api && 'hangar' in window.api
-        ? window.api.hangar.onEnvironmentsChanged(() => {
+    // Why (fork): an instabox machine started, resumed or re-enrolled; refresh hosts and reconnect now.
+    const unsubscribeInstabox =
+      window.api && 'instabox' in window.api
+        ? window.api.instabox.onEnvironmentsChanged(() => {
             void window.api.runtimeEnvironments
               .list()
               .then((environments) => useAppStore.getState().setRuntimeEnvironments(environments))
@@ -28,7 +28,7 @@ export function useRemoteRuntimeRecoveryTriggers(): void {
     return () => {
       window.removeEventListener('online', advanceRemoteRuntimeRecoveryBackoffs)
       unsubscribeSystemResumed?.()
-      unsubscribeHangar?.()
+      unsubscribeInstabox?.()
     }
   }, [])
 }

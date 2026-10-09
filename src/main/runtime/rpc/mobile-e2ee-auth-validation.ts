@@ -2,7 +2,7 @@ import type { DesktopMobileE2EEV2Session } from './mobile-e2ee-v2-desktop-sessio
 import { publicKeyFromBase64 } from './e2ee-crypto'
 import { parseRemoteRuntimeJsonText } from '../../../shared/remote-runtime-request-frames'
 
-// Exactly one credential: a paired device token, or (hangar machines) a hangar assertion.
+// Exactly one credential: a paired device token, or (instabox machines) an instabox assertion.
 export type MobileE2EEAuth = {
   type: 'e2ee_auth'
   deviceToken?: string
@@ -30,7 +30,7 @@ export function isValidMobileE2EEAuthVersion(
 
 export type E2EEDeviceResolvers<TDevice> = {
   resolveAuthenticatedDevice: (token: string) => TDevice | null
-  // Why: absent unless `orca serve --trusted-issuer-file` enabled hangar assertions.
+  // Why: absent unless `orca serve --trusted-issuer-file` enabled instabox assertions.
   resolveAssertedDevice?: (assertion: string) => TDevice | null
 }
 
@@ -75,8 +75,8 @@ export function e2eeAuthenticatedControl(
   auth: MobileE2EEAuth,
   deviceToken: string
 ): Record<string, unknown> {
-  // Why: a client admitted by a hangar assertion holds no device token; it keeps this one so its
-  // later sockets authenticate like a paired device (each still needs a hangar tunnel ticket).
+  // Why: a client admitted by an instabox assertion holds no device token; it keeps this one so its
+  // later sockets authenticate like a paired device (each still needs an instabox tunnel ticket).
   const issued = auth.hangarAssertion ? { deviceToken } : {}
   return v2Session
     ? {

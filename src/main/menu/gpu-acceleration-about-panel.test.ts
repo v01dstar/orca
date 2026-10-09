@@ -57,4 +57,17 @@ describe('GPU acceleration About panel', () => {
       credits: 'GPU acceleration: Disabled (Safe Graphics Mode)'
     })
   })
+
+  it('puts the flavor credit above the GPU status', () => {
+    expect(
+      createGpuAccelerationAboutPanelOptions({
+        appName: 'Instabox',
+        appVersion: '1.2.3',
+        platform: 'darwin',
+        gpuFallbackActive: false,
+        gpuFeatureStatus: { gpu_compositing: 'enabled' },
+        credit: 'Built on Orca'
+      })
+    ).toMatchObject({ credits: 'Built on Orca\nGPU acceleration: Enabled' })
+  })
 })

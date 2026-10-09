@@ -25,11 +25,14 @@ function XIcon({ size = 16, color = colors.textSecondary }) {
 export default function AboutScreen({
   onBack,
   openExternal,
-  versionLabel
+  versionLabel,
+  builtOnOrca = false
 }: {
   onBack: () => void
   openExternal: (url: string) => Promise<unknown>
   versionLabel: string
+  // Fork: the Instabox app credits the open-source Orca it is built on.
+  builtOnOrca?: boolean
 }) {
   const [error, setError] = useState<string | null>(null)
   const openLink = (url: string) => {
@@ -53,9 +56,13 @@ export default function AboutScreen({
       </View>
 
       <View style={styles.brand}>
-        <OrcaLogo size={28} />
-        <Text style={styles.brandName}>Orca</Text>
-        <Text style={styles.brandSub}>Open-source agent IDE for 100x builders</Text>
+        {builtOnOrca ? null : <OrcaLogo size={28} />}
+        <Text style={styles.brandName}>{builtOnOrca ? 'Instabox' : 'Orca'}</Text>
+        <Text style={styles.brandSub}>
+          {builtOnOrca
+            ? 'Built on Orca, the open-source agent IDE (MIT License)'
+            : 'Open-source agent IDE for 100x builders'}
+        </Text>
       </View>
 
       <View style={styles.section}>

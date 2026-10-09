@@ -3,7 +3,7 @@ import type { WebSocket } from 'ws'
 import type { DeviceEntry, DeviceRegistry } from '../device-registry'
 import type { E2EEKeypair } from '../e2ee-keypair'
 import { E2EEChannel, type E2EEAuthenticatedDevice } from './e2ee-channel'
-import { authenticateHangarAssertion } from './hangar-assertion-auth'
+import { authenticateInstaboxAssertion } from './instabox-assertion-auth'
 import { createMobileE2EEOutboundMemoryBudget } from './mobile-e2ee-outbound-memory-budget'
 import type { RuntimeCapability } from '../../../shared/protocol-version'
 
@@ -56,8 +56,8 @@ type MobileSocketWiringOptions = {
   onReady?: (socket: AuthenticatedMobileSocket) => void
   // Why: stale keys and missing registry entries both fail before RPC can explain the re-pair action.
   onUnpairedDeviceAuthFailure?: (metadata: MobileSocketTransportMetadata) => void
-  // Why: `orca serve --trusted-issuer-file` on hangar machines; direct sockets may then
-  // authenticate with a hangar assertion instead of a paired device token.
+  // Why: `orca serve --trusted-issuer-file` on instabox machines; direct sockets may then
+  // authenticate with an instabox assertion instead of a paired device token.
   trustedIssuerFile?: string
 }
 
@@ -95,21 +95,21 @@ export class MobileSocketWiring {
     this.trustedIssuerFile = options.trustedIssuerFile
   }
 
-  private resolveHangarDevice(
+  private resolveInstaboxDevice(
     trustedIssuerFile: string,
     assertion: string
   ): E2EEAuthenticatedDevice | null {
-    const claims = authenticateHangarAssertion(assertion, trustedIssuerFile)
+    const claims = authenticateInstaboxAssertion(assertion, trustedIssuerFile)
     if (!claims) {
       return null
     }
     try {
       return toAuthenticatedDevice(
-        this.deviceRegistry.getOrCreateHangarDevice(claims.sid, claims.scope)
+        this.deviceRegistry.getOrCreateInstaboxDevice(claims.sid, claims.scope)
       )
     } catch (error) {
       // Why: an unwritable registry must refuse the client, not throw out of the handshake.
-      console.error('[hangar] Failed to record a hangar session device:', error)
+      console.error('[instabox] Failed to record an instabox session device:', error)
       return null
     }
   }
@@ -185,10 +185,10 @@ export class MobileSocketWiring {
           }
           return toAuthenticatedDevice(device)
         },
-        // Why: hangar reaches the runtime only through its own tunnel, which arrives as a direct socket.
+        // Why: instabox reaches the runtime only through its own tunnel, which arrives as a direct socket.
         ...(metadata.transport === 'direct' && this.trustedIssuerFile
           ? {
-              resolveAssertedDevice: this.resolveHangarDevice.bind(this, this.trustedIssuerFile)
+              resolveAssertedDevice: this.resolveInstaboxDevice.bind(this, this.trustedIssuerFile)
             }
           : {}),
         onReady: (channel, device) => {

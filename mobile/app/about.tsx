@@ -23,6 +23,7 @@ export default function NativeAboutRoute() {
       onBack={() => router.back()}
       openExternal={(url) => Linking.openURL(url)}
       versionLabel={getVersionLabel()}
+      builtOnOrca={Constants.expoConfig?.extra?.appFlavor === 'instabox'}
     />
   )
 }

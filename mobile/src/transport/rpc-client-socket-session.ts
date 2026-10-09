@@ -1,4 +1,4 @@
-import { createRuntimeWebSocket } from '../hangar/hangar-lazy-websocket'
+import { createRuntimeWebSocket } from '../instabox/instabox-lazy-websocket'
 import {
   decrypt,
   decryptBytes,
@@ -47,7 +47,7 @@ export class RpcClientSocketSession {
   private handshakeTimer: ReturnType<typeof setTimeout> | null = null
 
   constructor(private readonly options: SocketSessionOptions) {
-    // Fork: a hangar endpoint dials through a fresh tunnel ticket (src/hangar).
+    // Fork: an Instabox endpoint dials through a fresh tunnel ticket (src/instabox).
     this.socket = createRuntimeWebSocket(options.endpoint)
     this.attachHandlers()
     this.armConnectTimeout()

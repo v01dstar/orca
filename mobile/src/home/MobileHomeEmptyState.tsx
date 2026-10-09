@@ -22,8 +22,8 @@ export function MobileHomeEmptyState(props: {
   contentMaxWidth: number
   isWideLayout: boolean
   onPairDesktop: () => void
-  // Fork: hangar machines need no desktop pairing.
-  onOpenHangar?: () => void
+  // Fork: instabox machines need no desktop pairing.
+  onOpenInstabox?: () => void
 }) {
   return (
     <View
@@ -47,10 +47,10 @@ export function MobileHomeEmptyState(props: {
           <QrCode size={17} color={colors.bgBase} />
           <Text style={styles.primaryButtonText}>Pair Desktop</Text>
         </Pressable>
-        {props.onOpenHangar ? (
-          <Pressable style={styles.secondaryButton} onPress={props.onOpenHangar}>
+        {props.onOpenInstabox ? (
+          <Pressable style={styles.secondaryButton} onPress={props.onOpenInstabox}>
             <Cloud size={16} color={colors.textSecondary} />
-            <Text style={styles.secondaryButtonText}>Use hangar machines</Text>
+            <Text style={styles.secondaryButtonText}>Use Instabox machines</Text>
           </Pressable>
         ) : null}
       </View>

@@ -24,6 +24,7 @@ import {
 } from './windows-install-dir-acl-recovery'
 import { mainProcessState as state, gpuFallbackEnvironment } from './main-process-state'
 import { createGpuAccelerationAboutPanelOptions } from '../menu/gpu-acceleration-about-panel'
+import { getAppFlavor } from '../../shared/app-flavor'
 
 export function updateGpuAccelerationAboutPanel(): void {
   app.setAboutPanelOptions(
@@ -32,7 +33,8 @@ export function updateGpuAccelerationAboutPanel(): void {
       appVersion: app.getVersion(),
       platform: process.platform,
       gpuFallbackActive: state.gpuFallbackActiveThisLaunch,
-      gpuFeatureStatus: state.gpuFeatureStatus
+      gpuFeatureStatus: state.gpuFeatureStatus,
+      credit: getAppFlavor().aboutCredit
     })
   )
 }

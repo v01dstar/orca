@@ -20,7 +20,7 @@ function run(
   })
 }
 
-describe('authenticateMobileE2EE with hangar assertions', () => {
+describe('authenticateMobileE2EE with instabox assertions', () => {
   it('accepts exactly one credential in the legacy and v2 shapes', () => {
     expect(run({ hangarAssertion: 'good' })).toMatchObject({ ok: true, device })
     expect(run({ deviceToken: 'token-1' })).toMatchObject({ ok: true, device })

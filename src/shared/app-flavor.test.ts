@@ -20,10 +20,10 @@ describe('getAppFlavor', () => {
     })
   })
 
-  it('names nothing the official app uses in the hangar flavor (the CLI learns it from its launcher)', () => {
-    vi.stubEnv('ORCA_APP_FLAVOR', 'hangar')
+  it('names nothing the official app uses in the instabox flavor (the CLI learns it from its launcher)', () => {
+    vi.stubEnv('ORCA_APP_FLAVOR', 'instabox')
     const flavor = getAppFlavor()
-    expect(flavor).toMatchObject({ id: 'hangar', autoUpdates: false })
+    expect(flavor).toMatchObject({ id: 'instabox', autoUpdates: false })
     const stock = { ...getStockForComparison() }
     for (const key of [
       'appName',
@@ -42,6 +42,6 @@ describe('getAppFlavor', () => {
 function getStockForComparison() {
   vi.stubEnv('ORCA_APP_FLAVOR', '')
   const stock = getAppFlavor()
-  vi.stubEnv('ORCA_APP_FLAVOR', 'hangar')
+  vi.stubEnv('ORCA_APP_FLAVOR', 'instabox')
   return stock
 }

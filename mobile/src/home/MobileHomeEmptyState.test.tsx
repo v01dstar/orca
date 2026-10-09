@@ -19,7 +19,7 @@ vi.mock('lucide-react-native', () => ({ Cloud: 'Cloud', QrCode: 'QrCode' }))
 describe('MobileHomeEmptyState', () => {
   let renderer: ReactTestRenderer | null = null
 
-  function render(onOpenHangar?: () => void): ReactTestRenderer {
+  function render(onOpenInstabox?: () => void): ReactTestRenderer {
     act(() => {
       renderer = create(
         createElement(MobileHomeEmptyState, {
@@ -27,7 +27,7 @@ describe('MobileHomeEmptyState', () => {
           contentMaxWidth: 600,
           isWideLayout: false,
           onPairDesktop: () => {},
-          onOpenHangar
+          onOpenInstabox
         })
       )
     })
@@ -45,16 +45,16 @@ describe('MobileHomeEmptyState', () => {
     renderer = null
   })
 
-  it('offers hangar machines only when the screen can open them', () => {
+  it('offers instabox machines only when the screen can open them', () => {
     expect(buttonLabels(render())).toEqual(['Pair Desktop'])
     act(() => renderer?.unmount())
 
-    const onOpenHangar = vi.fn()
-    const tree = render(onOpenHangar)
-    expect(buttonLabels(tree)).toEqual(['Pair Desktop', 'Use hangar machines'])
+    const onOpenInstabox = vi.fn()
+    const tree = render(onOpenInstabox)
+    expect(buttonLabels(tree)).toEqual(['Pair Desktop', 'Use Instabox machines'])
     act(() => {
       tree.root.findAll((node) => node.type === 'Pressable')[1]!.props.onPress()
     })
-    expect(onOpenHangar).toHaveBeenCalledOnce()
+    expect(onOpenInstabox).toHaveBeenCalledOnce()
   })
 })
