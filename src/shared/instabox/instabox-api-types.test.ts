@@ -30,6 +30,13 @@ describe('instaboxOrcaTemplates', () => {
     ])
   })
 
+  it('puts the orca template first so it is the default', () => {
+    const spec = { vcpus: 4, memMiB: 8192, persistentDiskGiB: 20 }
+    const universal = { id: 'universal', version: '1', defaultSpec: spec, capabilities: ['orca'] }
+    const orca = { id: 'orca', version: '1', defaultSpec: spec, capabilities: ['orca'] }
+    expect(instaboxOrcaTemplates([universal, orca]).map((t) => t.id)).toEqual(['orca', 'universal'])
+  })
+
   it('never offers a hidden template version', () => {
     const spec = { vcpus: 4, memMiB: 8192, persistentDiskGiB: 20 }
     const current = { id: 'orca', version: '1', defaultSpec: spec, capabilities: ['orca'] }
