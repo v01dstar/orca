@@ -237,6 +237,7 @@ export function createInstaboxApiClient(options: InstaboxApiClientOptions) {
       signal?: AbortSignal
     ): Promise<InstaboxTokens> {
       let intervalMs = Math.max(start.interval, 1) * 1000
+      const deadline = Date.now() + start.expiresIn * 1000
       for (;;) {
         await sleep(intervalMs, signal)
         try {
@@ -246,6 +247,15 @@ export function createInstaboxApiClient(options: InstaboxApiClientOptions) {
             auth: false
           })
         } catch (error) {
+          if (signal?.aborted) {
+            throw error
+          }
+          // Why: iOS kills in-flight requests while the user approves in the browser; poll again.
+          const transient =
+            !(error instanceof InstaboxApiError) || (error.retryable && error.status >= 500)
+          if (transient && Date.now() < deadline) {
+            continue
+          }
           if (!(error instanceof InstaboxApiError)) {
             throw error
           }
