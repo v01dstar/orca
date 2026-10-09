@@ -1727,6 +1727,8 @@
             "cancel": "Cancel",
             "create": "Create machine",
             "creating": "Creating machine…",
+            "noSnapshots": "No snapshots yet",
+            "snapshotSaving": "{{name}} (saving…)",
             "snapshots": "Snapshots",
             "name": "Machine name",
             "namePlaceholder": "machine-name",

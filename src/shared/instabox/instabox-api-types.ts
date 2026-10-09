@@ -135,14 +135,27 @@ export function instaboxMachineActions(state: string): InstaboxMachineAction[] {
   }
 }
 
-// A saved copy of a stopped machine's disks (no RAM); new machines can be created from it.
+// A saved copy of a machine's disks (no RAM); new machines can be created from it.
 export const InstaboxSnapshotSchema = z.object({
   id: z.string(),
   name: z.string(),
   template: z.object({ id: z.string(), version: z.string() }),
-  createdAt: z.string()
+  createdAt: z.string(),
+  // A running machine's snapshot is pending while its disks upload; only a ready one can be used.
+  status: z.string().optional(),
+  error: z.string().optional()
 })
 export type InstaboxSnapshot = z.infer<typeof InstaboxSnapshotSchema>
+
+// Snapshots saved before statuses existed have none; they are ready.
+export function isInstaboxSnapshotReady(snapshot: InstaboxSnapshot): boolean {
+  return (snapshot.status ?? 'ready') === 'ready'
+}
+
+// Running machines are saved live (disks only, not memory); stopped ones as before.
+export function canSaveInstaboxSnapshot(state: string): boolean {
+  return state === 'running' || state === 'stopped'
+}
 
 // A snapshot runs an Orca runtime when the template version it was saved from does.
 export function instaboxOrcaSnapshots(

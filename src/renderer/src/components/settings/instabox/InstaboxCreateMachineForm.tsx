@@ -2,6 +2,7 @@ import { Loader2 } from 'lucide-react'
 import { useState } from 'react'
 import {
   instaboxOrcaTemplates,
+  isInstaboxSnapshotReady,
   isValidInstaboxName,
   type InstaboxCreateMachineRequest,
   type InstaboxSnapshot,
@@ -39,6 +40,7 @@ export function InstaboxCreateMachineForm({
   onCreate
 }: InstaboxCreateMachineFormProps): React.JSX.Element {
   const orcaTemplates = instaboxOrcaTemplates(templates)
+  const usableSnapshots = snapshots.filter((snapshot) => snapshot.status !== 'failed')
   const [name, setName] = useState('')
   // `template:<id>` or `snapshot:<id>`: one Select picks either source.
   const [source, setSource] = useState(orcaTemplates[0] ? `template:${orcaTemplates[0].id}` : '')
@@ -90,16 +92,28 @@ export function InstaboxCreateMachineForm({
               </SelectItem>
             ))}
           </SelectGroup>
-          {snapshots.length > 0 ? (
-            <SelectGroup>
-              <SelectLabel>{translate(`${NS}.snapshots`, 'Snapshots')}</SelectLabel>
-              {snapshots.map((snapshot) => (
-                <SelectItem key={snapshot.id} value={`snapshot:${snapshot.id}`}>
-                  {snapshot.name}
+          <SelectGroup>
+            <SelectLabel>{translate(`${NS}.snapshots`, 'Snapshots')}</SelectLabel>
+            {usableSnapshots.length > 0 ? (
+              usableSnapshots.map((snapshot) => (
+                <SelectItem
+                  key={snapshot.id}
+                  value={`snapshot:${snapshot.id}`}
+                  disabled={!isInstaboxSnapshotReady(snapshot)}
+                >
+                  {isInstaboxSnapshotReady(snapshot)
+                    ? snapshot.name
+                    : translate(`${NS}.snapshotSaving`, '{{name}} (saving…)', {
+                        name: snapshot.name
+                      })}
                 </SelectItem>
-              ))}
-            </SelectGroup>
-          ) : null}
+              ))
+            ) : (
+              <SelectItem value="snapshot:none" disabled>
+                {translate(`${NS}.noSnapshots`, 'No snapshots yet')}
+              </SelectItem>
+            )}
+          </SelectGroup>
         </SelectContent>
       </Select>
       <Button type="button" variant="ghost" size="sm" onClick={onCancel} disabled={creating}>

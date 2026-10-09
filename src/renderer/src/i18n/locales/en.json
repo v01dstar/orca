@@ -12475,6 +12475,8 @@
             "creating": "Creating machine…",
             "create": "Create machine",
             "templates": "Templates",
+            "noSnapshots": "No snapshots yet",
+            "snapshotSaving": "{{name}} (saving…)",
             "snapshots": "Snapshots"
           },
           "InstaboxMachinesSection": {

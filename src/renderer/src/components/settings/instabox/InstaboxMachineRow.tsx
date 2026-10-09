@@ -1,5 +1,6 @@
 import { Loader2, MoreHorizontal } from 'lucide-react'
 import {
+  canSaveInstaboxSnapshot,
   instaboxMachineActions,
   type InstaboxMachineAction
 } from '../../../../../shared/instabox/instabox-api-types'
@@ -155,8 +156,7 @@ export function InstaboxMachineRow({
                 {translate(`${NS}.reconnect`, 'Re-enroll in Orca')}
               </DropdownMenuItem>
             ) : null}
-            {/* instabox saves snapshots only from stopped machines (disks, not RAM). */}
-            {machine.state === 'stopped' ? (
+            {canSaveInstaboxSnapshot(machine.state) ? (
               <DropdownMenuItem onSelect={onSaveSnapshot}>
                 {translate(`${NS}.saveSnapshot`, 'Save as snapshot…')}
               </DropdownMenuItem>

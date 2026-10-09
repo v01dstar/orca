@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { ActivityIndicator, Alert, StyleSheet, Text, TextInput, View } from 'react-native'
 import {
+  canSaveInstaboxSnapshot,
   instaboxMachineActions,
   isValidInstaboxName
 } from '../../../src/shared/instabox/instabox-api-types'
@@ -86,8 +87,7 @@ export function InstaboxMachineRow({
               onPress={() => void instabox.act(machine, 'stop', 'Stopping…')}
             />
           )}
-          {/* instabox saves snapshots only from stopped machines (disks, not RAM). */}
-          {state === 'stopped' && (
+          {canSaveInstaboxSnapshot(state) && (
             <InstaboxButton
               label="Save snapshot"
               onPress={() => setSnapshotName(`${machine.name}-snapshot`.slice(0, 63))}

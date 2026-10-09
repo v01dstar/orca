@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  canSaveInstaboxSnapshot,
   instaboxMachineActions,
+  isInstaboxSnapshotReady,
   instaboxOrcaSnapshots,
   instaboxOrcaTemplates,
   isValidInstaboxName
@@ -73,5 +75,27 @@ describe('isValidInstaboxName', () => {
     expect(isValidInstaboxName('-x')).toBe(false)
     expect(isValidInstaboxName('Orca')).toBe(false)
     expect(isValidInstaboxName('a'.repeat(64))).toBe(false)
+  })
+})
+
+describe('instabox snapshots', () => {
+  it('saves running machines live and stopped ones as before', () => {
+    expect(canSaveInstaboxSnapshot('running')).toBe(true)
+    expect(canSaveInstaboxSnapshot('stopped')).toBe(true)
+    expect(canSaveInstaboxSnapshot('suspended')).toBe(false)
+    expect(canSaveInstaboxSnapshot('creating')).toBe(false)
+  })
+
+  it('treats snapshots without a status as ready and pending ones as not yet usable', () => {
+    const base = {
+      id: 'sn_1',
+      name: 'box',
+      template: { id: 'orca', version: '1' },
+      createdAt: '2026-10-09T00:00:00Z'
+    }
+    expect(isInstaboxSnapshotReady(base)).toBe(true)
+    expect(isInstaboxSnapshotReady({ ...base, status: 'ready' })).toBe(true)
+    expect(isInstaboxSnapshotReady({ ...base, status: 'pending' })).toBe(false)
+    expect(isInstaboxSnapshotReady({ ...base, status: 'failed' })).toBe(false)
   })
 })

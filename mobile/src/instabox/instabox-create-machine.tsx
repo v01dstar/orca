@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { StyleSheet, Text, TextInput, View } from 'react-native'
 import {
   instaboxOrcaTemplates,
+  isInstaboxSnapshotReady,
   isValidInstaboxName
 } from '../../../src/shared/instabox/instabox-api-types'
 import { colors, spacing } from '../theme/mobile-theme'
@@ -18,39 +19,59 @@ export function InstaboxCreateMachine({
 }) {
   const [name, setName] = useState('')
   const [picked, setPicked] = useState<string | null>(null)
-  const sources: { label: string; a11y: string; source: InstaboxMachineSource }[] = [
-    ...instaboxOrcaTemplates(instabox.templates).map((t) => ({
-      label: `${t.id} template`,
-      a11y: `Create from the ${t.id} template`,
-      source: { templateId: t.id }
-    })),
-    ...instabox.snapshots.map((snapshot) => ({
-      label: snapshot.name,
+  type Source = { label: string; a11y: string; source: InstaboxMachineSource; ready: boolean }
+  const templateSources: Source[] = instaboxOrcaTemplates(instabox.templates).map((t) => ({
+    label: `${t.id} template`,
+    a11y: `Create from the ${t.id} template`,
+    source: { templateId: t.id },
+    ready: true
+  }))
+  const snapshotSources: Source[] = instabox.snapshots
+    .filter((snapshot) => snapshot.status !== 'failed')
+    .map((snapshot) => ({
+      label: isInstaboxSnapshotReady(snapshot) ? snapshot.name : `${snapshot.name} (saving…)`,
       a11y: `Create from snapshot ${snapshot.name}`,
-      source: { snapshotId: snapshot.id }
+      source: { snapshotId: snapshot.id },
+      ready: isInstaboxSnapshotReady(snapshot)
     }))
-  ]
+  // The orca template is listed first, so it is the default.
+  const sources = [...templateSources, ...snapshotSources]
   // Default to the first source until one is picked (or the picked one disappears).
-  const selected = sources.find((s) => sourceKey(s.source) === picked) ?? sources[0]
+  const selected = sources.find((s) => s.ready && sourceKey(s.source) === picked) ?? sources[0]
   const busyLabel = instabox.busy[`new:${name}`]
   return (
     <View style={styles.section}>
-      {sources.length > 1 ? (
-        <>
-          <Text style={styles.meta}>Create from</Text>
-          <View style={styles.sources}>
-            {sources.map((s) => (
-              <InstaboxButton
-                key={sourceKey(s.source)}
-                label={s.label}
-                accessibilityLabel={s.a11y}
-                selected={selected === s}
-                onPress={() => setPicked(sourceKey(s.source))}
-              />
-            ))}
-          </View>
-        </>
-      ) : null}
+      <Text style={styles.meta}>Create from</Text>
+      <View style={styles.sources}>
+        {templateSources.map((s) => (
+          <InstaboxButton
+            key={sourceKey(s.source)}
+            label={s.label}
+            accessibilityLabel={s.a11y}
+            selected={selected === s}
+            onPress={() => setPicked(sourceKey(s.source))}
+          />
+        ))}
+      </View>
+      <Text style={styles.meta}>Snapshots</Text>
+      {snapshotSources.length > 0 ? (
+        <View style={styles.sources}>
+          {snapshotSources.map((s) => (
+            <InstaboxButton
+              key={sourceKey(s.source)}
+              label={s.label}
+              accessibilityLabel={s.a11y}
+              disabled={!s.ready}
+              selected={selected === s}
+              onPress={() => setPicked(sourceKey(s.source))}
+            />
+          ))}
+        </View>
+      ) : (
+        <Text style={styles.hint}>
+          No snapshots yet. Stop a machine, then save it as a snapshot.
+        </Text>
+      )}
       <View style={styles.createRow}>
         <TextInput
           style={[instaboxInputStyle, styles.flex]}
@@ -83,6 +104,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md
   },
   meta: { fontSize: 13, color: colors.textSecondary },
+  hint: { fontSize: 13, color: colors.textMuted },
   sources: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   createRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   flex: { flex: 1 }
