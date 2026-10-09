@@ -6,6 +6,7 @@ import { Platform } from 'react-native'
 import { z } from 'zod'
 import {
   createInstaboxApiClient,
+  InstaboxApiError,
   type InstaboxApiClient
 } from '../../../src/shared/instabox/instabox-api-client'
 import {
@@ -100,6 +101,20 @@ export function instaboxClient(serverUrl?: string): InstaboxApiClient {
   })
 }
 
+// Why: right after returning from the browser, iOS may not have the network back yet.
+async function retryWhileOffline<T>(call: () => Promise<T>, attempts = 5): Promise<T> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await call()
+    } catch (error) {
+      if (error instanceof InstaboxApiError || attempt >= attempts) {
+        throw error
+      }
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+    }
+  }
+}
+
 export async function signInToInstabox(
   serverUrl: string,
   onCode: (start: InstaboxDeviceStart) => void,
@@ -110,11 +125,12 @@ export async function signInToInstabox(
   const start = await anonymous.startDeviceLogin()
   onCode(start)
   const tokens = await anonymous.waitForDeviceLogin(start, signal)
-  const me = await createInstaboxApiClient({
+  const signedIn = createInstaboxApiClient({
     baseUrl: origin,
     randomKey,
     getAccessToken: async () => tokens.accessToken
-  }).me()
+  })
+  const me = await retryWhileOffline(() => signedIn.me())
   const next = { serverUrl: origin, login: me.login, tokens }
   setSession(next)
   return next

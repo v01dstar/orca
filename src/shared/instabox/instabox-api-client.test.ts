@@ -24,6 +24,43 @@ const header = (call: Call | undefined, name: string): string | undefined =>
 const operation = (state: string) => ({ id: 'op_1', machineId: 'm_1', type: 'start', state })
 
 describe('createInstaboxApiClient', () => {
+  const tokens = {
+    accessToken: 'iba_a',
+    accessExpiresAt: '2026-10-08T00:00:00Z',
+    refreshToken: 'ibr_r',
+    refreshExpiresAt: '2026-11-08T00:00:00Z'
+  }
+  const deviceStart = {
+    deviceCode: 'ibd_1',
+    userCode: 'ABCD-1234',
+    verificationUri: 'https://github.com/login/device',
+    interval: 0,
+    expiresIn: 900
+  }
+
+  it('keeps polling the device flow through a request iOS killed in the background', async () => {
+    const { calls, fetchImpl } = fakeFetch([
+      new TypeError('Network request failed'),
+      json(400, { error: { code: 'authorization_pending', message: 'waiting' } }),
+      json(200, tokens)
+    ])
+    const client = createInstaboxApiClient({ baseUrl: 'https://h.test', fetchImpl })
+
+    expect(await client.waitForDeviceLogin(deviceStart)).toEqual(tokens)
+    expect(calls).toHaveLength(3)
+  })
+
+  it('stops polling the device flow when authorization is denied', async () => {
+    const { fetchImpl } = fakeFetch([
+      json(400, { error: { code: 'access_denied', message: 'denied' } })
+    ])
+    const client = createInstaboxApiClient({ baseUrl: 'https://h.test', fetchImpl })
+
+    await expect(client.waitForDeviceLogin(deviceStart)).rejects.toMatchObject({
+      code: 'access_denied'
+    })
+  })
+
   it('retries once with a refreshed token after a 401', async () => {
     const { calls, fetchImpl } = fakeFetch([
       json(401, { error: { code: 'unauthenticated', message: 'expired' } }),

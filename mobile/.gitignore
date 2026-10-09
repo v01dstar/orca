@@ -16,3 +16,6 @@ dist/
 *.mobileprovision
 *.orig.*
 web-build/
+
+# Fork: local xcodebuild -derivedDataPath output
+/build-ios/
