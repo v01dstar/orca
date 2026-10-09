@@ -1,6 +1,7 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithHasLiveOrPersistedServeOrSshOwnedPtyBinding } from './orca-runtime-has-live-or-persisted-serve-or-ssh-owned-pty-binding'
 import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../shared/runtime-types'
 import { normalizeCompatibleAgentTitleForOwner } from '../../shared/agent-title-owner'
 import { getLatestPtyTitle } from './runtime-worktree-status-projection'
 import type {
@@ -35,11 +36,11 @@ export class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal extends OrcaRu
       split?: { splitFromLeafId: string; direction: 'horizontal' | 'vertical' }
       notify?: boolean
     }
-  ): void {
+  ): boolean {
     if (
       !this.isMobileSessionSurfaceMembershipAllowed(worktreeId, args.tabId, args.leafId, pty.ptyId)
     ) {
-      return
+      return false
     }
     const existing = this.mobileSessionTabsByWorktree.get(worktreeId)
     const ownerAgent = pty.launchAgent ?? pty.foregroundAgent
@@ -147,6 +148,12 @@ export class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal extends OrcaRu
     if (args.notify !== false) {
       this.notifyMobileSessionTabsChanged(worktreeId)
     }
+    return true
+  }
+
+  // Fork: headless `orca serve` never has a window; its mobile session is the discoverable surface.
+  protected isHeadlessDiscoverable(publishedToMobileSession: boolean): boolean {
+    return publishedToMobileSession && this.authoritativeWindowId === HEADLESS_RUNTIME_WINDOW_ID
   }
 
   protected touchMobileSessionSnapshotsForPty(
