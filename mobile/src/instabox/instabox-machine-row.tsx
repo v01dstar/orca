@@ -19,7 +19,7 @@ export function InstaboxMachineRow({
   instabox: ReturnType<typeof useInstaboxMachines>
   onOpen: (hostId: string) => void
 }) {
-  const { machine, orcaCapable, hostId } = row
+  const { machine, hostId } = row
   const state = machine.state
   const actions = instaboxMachineActions(state)
   // null: the save-snapshot field is closed.
@@ -33,7 +33,6 @@ export function InstaboxMachineRow({
       <Text style={styles.meta}>
         {machine.template.id} · {machine.spec.vcpus} vCPU · {Math.round(machine.spec.memMiB / 1024)}{' '}
         GiB
-        {orcaCapable ? '' : ' · no Orca'}
       </Text>
       {busy ? (
         <ActivityIndicator style={styles.spinner} color={colors.textSecondary} />
@@ -94,7 +93,6 @@ export function InstaboxMachineRow({
             />
           )}
           {state === 'running' &&
-            orcaCapable &&
             (hostId ? (
               <InstaboxButton primary label="Open" onPress={() => onOpen(hostId)} />
             ) : (

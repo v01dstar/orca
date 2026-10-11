@@ -145,18 +145,33 @@ export const InstaboxSnapshotSchema = z.object({
 export type InstaboxSnapshot = z.infer<typeof InstaboxSnapshotSchema>
 
 // A snapshot runs an Orca runtime when the template version it was saved from does.
+// Whether the template version a machine or snapshot was made from runs an Orca runtime.
+export function instaboxRunsOrca(
+  ref: { id: string; version: string },
+  templates: readonly InstaboxTemplate[]
+): boolean {
+  return templates.some(
+    (t) =>
+      t.id === ref.id &&
+      t.version === ref.version &&
+      (t.capabilities ?? []).includes(INSTABOX_ORCA_CAPABILITY)
+  )
+}
+
 export function instaboxOrcaSnapshots(
   snapshots: readonly InstaboxSnapshot[],
   templates: readonly InstaboxTemplate[]
 ): InstaboxSnapshot[] {
-  return snapshots.filter((snapshot) =>
-    templates.some(
-      (t) =>
-        t.id === snapshot.template.id &&
-        t.version === snapshot.template.version &&
-        (t.capabilities ?? []).includes(INSTABOX_ORCA_CAPABILITY)
-    )
-  )
+  return snapshots.filter((snapshot) => instaboxRunsOrca(snapshot.template, templates))
+}
+
+// Why: a machine without an Orca runtime (herdr, universal, ...) cannot be an Orca host, so Orca
+// does not list it; the instabox dashboard and CLI still show and reach every machine.
+export function instaboxOrcaMachines(
+  machines: readonly InstaboxMachine[],
+  templates: readonly InstaboxTemplate[]
+): InstaboxMachine[] {
+  return machines.filter((machine) => instaboxRunsOrca(machine.template, templates))
 }
 
 // instabox's rule for machine and snapshot names (internal/server/machines.go nameRE).

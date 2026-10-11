@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
   instaboxMachineActions,
+  instaboxOrcaMachines,
   instaboxOrcaSnapshots,
   instaboxOrcaTemplates,
-  isValidInstaboxName
+  isValidInstaboxName,
+  type InstaboxMachine
 } from './instabox-api-types'
 
 describe('instaboxMachineActions', () => {
@@ -42,6 +44,36 @@ describe('instaboxOrcaTemplates', () => {
     const current = { id: 'orca', version: '1', defaultSpec: spec, capabilities: ['orca'] }
     const retired = { ...current, version: '0', hidden: true }
     expect(instaboxOrcaTemplates([current, retired]).map((t) => t.version)).toEqual(['1'])
+  })
+})
+
+describe('instaboxOrcaMachines', () => {
+  it('keeps machines made from an Orca-capable template version', () => {
+    const spec = { vcpus: 4, memMiB: 8192, persistentDiskGiB: 20 }
+    const templates = [
+      { id: 'orca', version: '2', defaultSpec: spec, capabilities: ['orca'] },
+      { id: 'herdr', version: '1', defaultSpec: spec, capabilities: ['activity'] },
+      { id: 'universal', version: '1', defaultSpec: spec, capabilities: [] }
+    ]
+    const machine = (name: string, id: string, version: string): InstaboxMachine => ({
+      id: `m_${name}`,
+      name,
+      desiredState: 'running',
+      state: 'running',
+      revision: 1,
+      template: { id, version },
+      spec,
+      runtime: { ready: true },
+      createdAt: '',
+      updatedAt: ''
+    })
+    const machines = [
+      machine('a', 'orca', '2'),
+      machine('b', 'herdr', '1'),
+      machine('c', 'universal', '1'),
+      machine('d', 'orca', '9')
+    ]
+    expect(instaboxOrcaMachines(machines, templates).map((m) => m.name)).toEqual(['a'])
   })
 })
 
