@@ -73,14 +73,14 @@ export function InstaboxMachineRow({
   onSaveSnapshot,
   onDelete
 }: InstaboxMachineRowProps): React.JSX.Element {
-  const { machine, orcaCapable, environmentId } = entry
+  const { machine, environmentId } = entry
   const running = machine.state === 'running'
   const actions = instaboxMachineActions(machine.state)
   const primary: { label: string; run: () => void } | null = actions.includes('start')
     ? { label: translate(`${NS}.start`, 'Start'), run: () => onAction('start') }
     : actions.includes('resume')
       ? { label: translate(`${NS}.resume`, 'Resume'), run: () => onAction('resume') }
-      : running && orcaCapable && !environmentId
+      : running && !environmentId
         ? { label: translate(`${NS}.connect`, 'Connect'), run: onConnect }
         : null
   const spec = `${machine.spec.vcpus} vCPU · ${Math.round(machine.spec.memMiB / 1024)} GiB`
@@ -105,11 +105,7 @@ export function InstaboxMachineRow({
         </div>
         <p className="truncate text-xs text-muted-foreground">
           {machine.template.id}@{machine.template.version} · {spec}
-          {environmentId
-            ? ` · ${translate(`${NS}.connected`, 'Connected in Orca')}`
-            : orcaCapable
-              ? ''
-              : ` · ${translate(`${NS}.noOrca`, 'Template without Orca')}`}
+          {environmentId ? ` · ${translate(`${NS}.connected`, 'Connected in Orca')}` : ''}
         </p>
         {machine.lastError ? (
           <p className="mt-0.5 truncate text-xs text-destructive">{machine.lastError.message}</p>
@@ -151,7 +147,7 @@ export function InstaboxMachineRow({
                 {translate(`${NS}.stop`, 'Stop')}
               </DropdownMenuItem>
             ) : null}
-            {running && orcaCapable && environmentId ? (
+            {running && environmentId ? (
               <DropdownMenuItem onSelect={onConnect}>
                 {translate(`${NS}.reconnect`, 'Re-enroll in Orca')}
               </DropdownMenuItem>

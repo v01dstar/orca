@@ -1,7 +1,8 @@
 // IPC for instabox (fork): account, machines, and their Orca environments.
 import { app, BrowserWindow, ipcMain } from 'electron'
 import {
-  INSTABOX_ORCA_CAPABILITY,
+  instaboxOrcaMachines,
+  instaboxRunsOrca,
   instaboxOrcaSnapshots,
   type InstaboxCreateMachineRequest,
   type InstaboxSnapshot,
@@ -31,14 +32,6 @@ function broadcast(channel: string, payload?: unknown): void {
   }
 }
 
-const supportsOrca = (templates: InstaboxTemplate[], machine: InstaboxMachine): boolean =>
-  templates.some(
-    (t) =>
-      t.id === machine.template.id &&
-      t.version === machine.template.version &&
-      (t.capabilities ?? []).includes(INSTABOX_ORCA_CAPABILITY)
-  )
-
 export async function registerInstaboxHandlers(): Promise<void> {
   const userDataPath = app.getPath('userData')
   const account = new InstaboxAccount(userDataPath)
@@ -61,7 +54,7 @@ export async function registerInstaboxHandlers(): Promise<void> {
   // Why: an Orca environment needs a running machine with an orca-capable template.
   async function ensureEnvironment(machine: InstaboxMachine, templates: InstaboxTemplate[]) {
     const linked = envs.links().some((link) => link.machineId === machine.id)
-    if (!linked && machine.state === 'running' && supportsOrca(templates, machine)) {
+    if (!linked && machine.state === 'running' && instaboxRunsOrca(machine.template, templates)) {
       await envs.connect(machine)
     }
   }
@@ -87,9 +80,8 @@ export async function registerInstaboxHandlers(): Promise<void> {
     ])
     const links = envs.links()
     return {
-      machines: machines.map((machine) => ({
+      machines: instaboxOrcaMachines(machines, templates).map((machine) => ({
         machine,
-        orcaCapable: supportsOrca(templates, machine),
         environmentId: links.find((link) => link.machineId === machine.id)?.environmentId ?? null
       })),
       templates,

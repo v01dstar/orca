@@ -12506,7 +12506,6 @@
             "resume": "Resume",
             "connect": "Connect",
             "connected": "Connected in Orca",
-            "noOrca": "Template without Orca",
             "more": "More machine actions",
             "suspend": "Suspend",
             "stop": "Stop",

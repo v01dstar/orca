@@ -12,8 +12,6 @@ export type InstaboxAccountState =
 
 export type InstaboxMachineEntry = {
   machine: InstaboxMachine
-  // The machine's template has the `orca` capability (an Orca runtime runs in it).
-  orcaCapable: boolean
   environmentId: string | null
 }
 

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   INSTABOX_ORCA_CAPABILITY,
+  instaboxOrcaMachines,
   instaboxOrcaSnapshots,
   type InstaboxCreateMachineRequest,
   type InstaboxDeviceStart,
@@ -27,7 +28,6 @@ export type InstaboxMachineSource = { templateId: string } | { snapshotId: strin
 
 export type InstaboxMachineRowModel = {
   machine: InstaboxMachine
-  orcaCapable: boolean
   hostId: string | null
 }
 
@@ -63,14 +63,8 @@ export function useInstaboxMachines() {
       setTemplates(nextTemplates)
       setSnapshots(instaboxOrcaSnapshots(nextSnapshots, nextTemplates))
       setMachines(
-        list.map((machine) => ({
+        instaboxOrcaMachines(list, nextTemplates).map((machine) => ({
           machine,
-          orcaCapable: nextTemplates.some(
-            (t) =>
-              t.id === machine.template.id &&
-              t.version === machine.template.version &&
-              (t.capabilities ?? []).includes(INSTABOX_ORCA_CAPABILITY)
-          ),
           hostId: hostIds.has(`instabox-${machine.id}`) ? `instabox-${machine.id}` : null
         }))
       )

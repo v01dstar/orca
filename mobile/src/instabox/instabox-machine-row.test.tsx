@@ -54,7 +54,7 @@ describe('InstaboxMachineRow', () => {
     act(() => {
       renderer = create(
         createElement(InstaboxMachineRow, {
-          row: { machine, orcaCapable: true, hostId: 'instabox-m_1' },
+          row: { machine, hostId: 'instabox-m_1' },
           busy: undefined,
           instabox,
           onOpen: () => {}
