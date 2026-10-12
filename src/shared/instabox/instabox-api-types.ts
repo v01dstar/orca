@@ -2,8 +2,24 @@
 // Parsed with zod's default strip: unknown fields and new enum values must not break Orca.
 import { z } from 'zod'
 
-// The API host; box.instacloud.com is the dashboard and only redirects /v1, which fetch refuses.
-export const INSTABOX_DEFAULT_SERVER_URL = 'https://api.box.instacloud.com'
+// The API host; app.instabox.sh is the dashboard, which the API does not answer on.
+export const INSTABOX_DEFAULT_SERVER_URL = 'https://api.instabox.sh'
+
+// Why: instabox left instacloud.com on 2026-10-12 without redirects; same server, so sessions carry over.
+const RETIRED_INSTABOX_ORIGINS: ReadonlySet<string> = new Set([
+  'https://api.box.instacloud.com',
+  'https://box.instacloud.com'
+])
+
+/** Maps an origin saved before the domain move to the current API origin. */
+export function migrateInstaboxServerUrl(serverUrl: string): string {
+  try {
+    const origin = new URL(serverUrl).origin
+    return RETIRED_INSTABOX_ORIGINS.has(origin) ? INSTABOX_DEFAULT_SERVER_URL : serverUrl
+  } catch {
+    return serverUrl
+  }
+}
 
 export const InstaboxErrorSchema = z.object({
   code: z.string(),

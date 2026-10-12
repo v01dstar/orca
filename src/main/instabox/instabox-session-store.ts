@@ -5,11 +5,14 @@ import { join } from 'node:path'
 import { safeStorage } from 'electron'
 import { z } from 'zod'
 import { writeSecureJsonFile } from '../../shared/secure-file'
-import { InstaboxTokensSchema } from '../../shared/instabox/instabox-api-types'
+import {
+  InstaboxTokensSchema,
+  migrateInstaboxServerUrl
+} from '../../shared/instabox/instabox-api-types'
 import type { InstaboxSessionPersistence } from '../../shared/instabox/instabox-ipc'
 
 export const InstaboxSessionSchema = z.object({
-  serverUrl: z.string().min(1),
+  serverUrl: z.string().min(1).transform(migrateInstaboxServerUrl),
   login: z.string(),
   tokens: InstaboxTokensSchema
 })

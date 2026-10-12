@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
+  INSTABOX_DEFAULT_SERVER_URL,
+  migrateInstaboxServerUrl,
   canSaveInstaboxSnapshot,
   instaboxMachineActions,
   isInstaboxSnapshotReady,
@@ -129,5 +131,25 @@ describe('instabox snapshots', () => {
     expect(isInstaboxSnapshotReady({ ...base, status: 'ready' })).toBe(true)
     expect(isInstaboxSnapshotReady({ ...base, status: 'pending' })).toBe(false)
     expect(isInstaboxSnapshotReady({ ...base, status: 'failed' })).toBe(false)
+  })
+})
+
+describe('migrateInstaboxServerUrl', () => {
+  it('moves origins saved before the instabox.sh move to the current API', () => {
+    expect(migrateInstaboxServerUrl('https://api.box.instacloud.com')).toBe(
+      INSTABOX_DEFAULT_SERVER_URL
+    )
+    expect(migrateInstaboxServerUrl('https://box.instacloud.com/')).toBe(
+      INSTABOX_DEFAULT_SERVER_URL
+    )
+    expect(INSTABOX_DEFAULT_SERVER_URL).toBe('https://api.instabox.sh')
+  })
+
+  it('keeps other servers and unparseable values as they are', () => {
+    expect(migrateInstaboxServerUrl('http://127.0.0.1:8080')).toBe('http://127.0.0.1:8080')
+    expect(migrateInstaboxServerUrl('https://instabox.example.com')).toBe(
+      'https://instabox.example.com'
+    )
+    expect(migrateInstaboxServerUrl('not a url')).toBe('not a url')
   })
 })

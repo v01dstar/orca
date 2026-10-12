@@ -11,6 +11,7 @@ import {
 } from '../../../src/shared/instabox/instabox-api-client'
 import {
   InstaboxTokensSchema,
+  migrateInstaboxServerUrl,
   type InstaboxDeviceStart
 } from '../../../src/shared/instabox/instabox-api-types'
 import {
@@ -26,7 +27,7 @@ import {
 // Why: SecureStore keys allow only [A-Za-z0-9._-].
 const SESSION_KEY = 'orca.instabox.session'
 const StoredSessionSchema = z.object({
-  serverUrl: z.string().min(1),
+  serverUrl: z.string().min(1).transform(migrateInstaboxServerUrl),
   login: z.string(),
   tokens: InstaboxTokensSchema
 })
@@ -120,7 +121,7 @@ export async function signInToInstabox(
   onCode: (start: InstaboxDeviceStart) => void,
   signal?: AbortSignal
 ): Promise<InstaboxStoredSession> {
-  const origin = new URL(serverUrl.trim()).origin
+  const origin = migrateInstaboxServerUrl(new URL(serverUrl.trim()).origin)
   const anonymous = instaboxClient(origin)
   const start = await anonymous.startDeviceLogin()
   onCode(start)

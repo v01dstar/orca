@@ -4,6 +4,7 @@ import {
   InstaboxApiError,
   type InstaboxApiClient
 } from '../../shared/instabox/instabox-api-client'
+import { migrateInstaboxServerUrl } from '../../shared/instabox/instabox-api-types'
 import { createInstaboxTokenSource } from '../../shared/instabox/instabox-token-source'
 import { beginInstaboxSignIn } from './instabox-sign-in'
 import type {
@@ -23,7 +24,7 @@ export function normalizeInstaboxServerUrl(raw: string): string {
   if (url.protocol !== 'https:' && !(loopback && url.protocol === 'http:')) {
     throw new Error('Instabox server URL must use https')
   }
-  return url.origin
+  return migrateInstaboxServerUrl(url.origin)
 }
 
 export class InstaboxAccount {
