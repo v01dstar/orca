@@ -10,7 +10,7 @@ import {
 import { devicePrincipalOf } from '../device-principal'
 import type { E2EEKeypair } from '../e2ee-keypair'
 import { E2EEChannel, type E2EEAuthenticatedDevice } from './e2ee-channel'
-import { authenticateInstaboxAssertion } from './instabox-assertion-auth'
+import { resolveInstaboxSessionDevice } from './instabox-e2ee-assertion-auth'
 import { createMobileE2EEOutboundMemoryBudget } from './mobile-e2ee-outbound-memory-budget'
 import type { RuntimeCapability } from '../../../shared/protocol-version'
 import type { RpcBinarySender } from './rpc-binary-sender'
@@ -116,25 +116,6 @@ export class MobileSocketWiring {
     this.ephemeralSweep.unref?.()
   }
 
-  private resolveInstaboxDevice(
-    trustedIssuerFile: string,
-    assertion: string
-  ): E2EEAuthenticatedDevice | null {
-    const claims = authenticateInstaboxAssertion(assertion, trustedIssuerFile)
-    if (!claims) {
-      return null
-    }
-    try {
-      return toAuthenticatedDevice(
-        this.deviceRegistry.getOrCreateInstaboxDevice(claims.sid, claims.scope)
-      )
-    } catch (error) {
-      // Why: an unwritable registry must refuse the client, not throw out of the handshake.
-      console.error('[instabox] Failed to record an instabox session device:', error)
-      return null
-    }
-  }
-
   dispose(): void {
     clearInterval(this.ephemeralSweep)
   }
@@ -212,6 +193,7 @@ export class MobileSocketWiring {
     if (!channel) {
       const connectionId = randomBytes(8).toString('hex')
       this.connectionIds.set(ws, connectionId)
+      const trustedIssuerFile = this.trustedIssuerFile
       channel = new E2EEChannel(ws, {
         serverSecretKey: this.e2eeKeypair.secretKey,
         transportContext:
@@ -264,9 +246,16 @@ export class MobileSocketWiring {
           }
         },
         // Why: instabox reaches the runtime only through its own tunnel, which arrives as a direct socket.
-        ...(metadata.transport === 'direct' && this.trustedIssuerFile
+        ...(metadata.transport === 'direct' && trustedIssuerFile
           ? {
-              resolveAssertedDevice: this.resolveInstaboxDevice.bind(this, this.trustedIssuerFile)
+              resolveAssertedDevice: (assertion: string) => {
+                const device = resolveInstaboxSessionDevice(
+                  this.deviceRegistry,
+                  trustedIssuerFile,
+                  assertion
+                )
+                return device && toAuthenticatedDevice(device)
+              }
             }
           : {}),
         onReady: (channel, device) => {

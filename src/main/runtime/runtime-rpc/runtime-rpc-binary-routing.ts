@@ -1,6 +1,7 @@
 import type { WebSocket } from 'ws'
 import type { TerminalStreamFrame } from '../../../shared/terminal-stream-protocol'
-import { DeviceRegistry } from '../device-registry'
+import type { DeviceRegistry } from '../device-registry'
+import { InstaboxDeviceRegistry } from '../instabox-session-devices'
 import { loadOrCreateE2EEKeypair, type E2EEKeypair } from '../e2ee-keypair'
 import { RuntimeRpcState } from './runtime-rpc-state'
 import {
@@ -88,7 +89,7 @@ export class RuntimeRpcBinaryRouting extends RuntimeRpcState {
   protected initializePairingIdentity(): PairingIdentityInitialization {
     let deviceRegistry: DeviceRegistry
     try {
-      deviceRegistry = new DeviceRegistry(this.userDataPath)
+      deviceRegistry = new InstaboxDeviceRegistry(this.userDataPath)
     } catch (error) {
       console.error('[runtime] Failed to initialize pairing registry:', error)
       return {

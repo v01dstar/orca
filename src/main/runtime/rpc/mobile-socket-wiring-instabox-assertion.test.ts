@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { DeviceRegistry } from '../device-registry'
+import { InstaboxDeviceRegistry } from '../instabox-session-devices'
 import { decrypt, deriveSharedKey, encrypt, generateKeyPair } from './e2ee-crypto'
 import { createInstaboxTestIssuer } from './instabox-assertion-test-harness'
 import { MobileSocketWiring } from './mobile-socket-wiring'
@@ -23,7 +23,7 @@ describe('MobileSocketWiring instabox assertions', () => {
     const ws = new FakeSocket()
     const transport = new FakeTransport()
     const onText = vi.fn()
-    const registry = new DeviceRegistry(dir)
+    const registry = new InstaboxDeviceRegistry(dir)
     const wiring = new MobileSocketWiring({
       deviceRegistry: registry,
       e2eeKeypair: {

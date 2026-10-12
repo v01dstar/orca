@@ -1,6 +1,7 @@
 import type { DeviceScope } from '../../shared/runtime-types'
 import { mintDeviceCredential } from './device-credential'
 import type { DeviceEntry, TokenDeviceEntry } from './device-entry'
+import { DeviceRegistry } from './device-registry'
 
 // Why: instabox sessions end without telling the runtime, so their rows age out instead.
 const INSTABOX_DEVICE_RETENTION_MS = 30 * 24 * 60 * 60 * 1000
@@ -32,4 +33,17 @@ export function planInstaboxSessionDevice(
   }
   const retained = devices.filter((d) => !d.hangarSessionId || d.lastSeenAt >= cutoff)
   return { entry, nextDevices: [...retained, entry] }
+}
+
+// Why a subclass: keeps the instabox row out of upstream's registry, which sits at its size limit.
+export class InstaboxDeviceRegistry extends DeviceRegistry {
+  getOrCreateInstaboxDevice(sessionId: string, scope: DeviceScope): TokenDeviceEntry {
+    const plan = planInstaboxSessionDevice(this.devices, sessionId, scope, Date.now())
+    if (plan.nextDevices) {
+      // Why: a credential is not valid until its durable registry write succeeds.
+      this.save(plan.nextDevices)
+      this.devices = plan.nextDevices
+    }
+    return plan.entry
+  }
 }

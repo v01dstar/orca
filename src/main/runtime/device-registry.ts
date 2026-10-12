@@ -22,7 +22,6 @@ import {
 } from './delegated-mobile-devices'
 import type { RuntimeDeviceGrant } from './rpc/rpc-method-permission'
 import { validGrants } from './device-registry-row-validation'
-import { planInstaboxSessionDevice } from './instabox-session-devices'
 import {
   isPendingTokenRow,
   mobilePairingConnectionModeOf,
@@ -47,7 +46,7 @@ const STALE_WRITE_TEMP_AGE_MS = 24 * 60 * 60 * 1000
 
 export class DeviceRegistry {
   private readonly registryPath: string
-  private devices: DeviceEntry[] = []
+  protected devices: DeviceEntry[] = []
   /** Set when the registry exists but could not be read, which makes `devices` a lie to save from. */
   private registryUnreadable = false
   /** A parse failure, now or in an earlier run, means an unlisted device may still exist. */
@@ -165,16 +164,6 @@ export class DeviceRegistry {
       this.devices = nextDevices
     }
     return entries
-  }
-
-  getOrCreateInstaboxDevice(sessionId: string, scope: DeviceScope): TokenDeviceEntry {
-    const plan = planInstaboxSessionDevice(this.devices, sessionId, scope, Date.now())
-    if (plan.nextDevices) {
-      // Why: a credential is not valid until its durable registry write succeeds.
-      this.save(plan.nextDevices)
-      this.devices = plan.nextDevices
-    }
-    return plan.entry
   }
 
   removeDevice(deviceId: string): boolean {
@@ -383,7 +372,7 @@ export class DeviceRegistry {
   }
 
   // Why: durable (fsync'd) for security transitions such as a device-key fork.
-  private save(devices: DeviceEntry[], options: { durable?: boolean } = {}): void {
+  protected save(devices: DeviceEntry[], options: { durable?: boolean } = {}): void {
     this.assertReadable()
     const write = options.durable ? writeDurableSecureJsonFile : writeSecureJsonFile
     write(this.registryPath, devices)

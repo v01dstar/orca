@@ -17,6 +17,14 @@ import {
   mergeMobileSessionTabGroups
 } from './mobile-session-tab-merge'
 
+function snapshotHasPtyTab(snapshot: RuntimeMobileSessionTabsSnapshot, ptyId: string): boolean {
+  return snapshot.tabs.some(
+    (tab) =>
+      tab.type === 'terminal' &&
+      (tab.ptyId === ptyId || tab.parentLayout?.ptyIdsByLeafId?.[tab.leafId] === ptyId)
+  )
+}
+
 export class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal extends OrcaRuntimeWithHasLiveOrPersistedServeOrSshOwnedPtyBinding {
   /**
    * Publishes a PTY-backed terminal tab snapshot to the synced mobile session,
@@ -152,8 +160,14 @@ export class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal extends OrcaRu
   }
 
   // Fork: headless `orca serve` never has a window; its mobile session is the discoverable surface.
-  protected isHeadlessDiscoverable(publishedToMobileSession: boolean): boolean {
-    return publishedToMobileSession && this.authoritativeWindowId === HEADLESS_RUNTIME_WINDOW_ID
+  protected isHeadlessDiscoverable(ptyId: string | undefined): boolean {
+    return (
+      ptyId !== undefined &&
+      this.authoritativeWindowId === HEADLESS_RUNTIME_WINDOW_ID &&
+      [...this.mobileSessionTabsByWorktree.values()].some((snapshot) =>
+        snapshotHasPtyTab(snapshot, ptyId)
+      )
+    )
   }
 
   protected touchMobileSessionSnapshotsForPty(
@@ -161,12 +175,7 @@ export class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal extends OrcaRu
     options: { immediate?: boolean } = {}
   ): void {
     for (const [worktreeId, snapshot] of this.mobileSessionTabsByWorktree) {
-      const hasPtyBackedTab = snapshot.tabs.some(
-        (tab) =>
-          tab.type === 'terminal' &&
-          (tab.ptyId === ptyId || tab.parentLayout?.ptyIdsByLeafId?.[tab.leafId] === ptyId)
-      )
-      if (!hasPtyBackedTab) {
+      if (!snapshotHasPtyTab(snapshot, ptyId)) {
         continue
       }
       this.touchMobileSessionTabsForWorktree(worktreeId, options)

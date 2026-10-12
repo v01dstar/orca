@@ -272,21 +272,15 @@ export class E2EEChannel {
     // authentication success; relay sockets additionally bind this context to
     // their immutable relayDeviceId in the resolver.
     this.onReady(this, authenticatedDevice)
-    // Why: a client admitted by an instabox assertion holds no device token; it keeps this one so its
-    // later sockets authenticate like a paired device (each still needs an instabox tunnel ticket).
-    const issued =
-      authentication.viaAssertion && authenticatedDevice.deviceToken
-        ? { deviceToken: authenticatedDevice.deviceToken }
-        : {}
     this.sendEncryptedControl(
       this.v2Session
         ? {
             type: 'e2ee_authenticated',
             v: 2,
             transcriptHashB64: this.v2Session.transcriptHashB64,
-            ...issued
+            ...authentication.issued
           }
-        : { type: 'e2ee_authenticated', ...issued }
+        : { type: 'e2ee_authenticated', ...authentication.issued }
     )
   }
 

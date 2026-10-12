@@ -3,7 +3,10 @@ import { publicKeyFromBase64 } from './e2ee-crypto'
 import { parseRemoteRuntimeJsonText } from '../../../shared/remote-runtime-request-frames'
 import { isDeviceProofB64, verifyDeviceProof } from '../../../shared/device-key-proof'
 import { INSECURE_WEB_ORIGIN_AUTH_CODE } from '../../../shared/web-origin-security'
-import { classifyInstaboxAssertionAuth } from './instabox-e2ee-assertion-auth'
+import {
+  classifyInstaboxAssertionAuth,
+  instaboxIssuedDeviceToken
+} from './instabox-e2ee-assertion-auth'
 
 export type ClassifiedE2EEAuth =
   | { kind: 'token'; deviceToken: string; clientCapabilities?: unknown }
@@ -109,7 +112,8 @@ export function authenticateMobileE2EE<TDevice extends { deviceToken?: string }>
   // Why: absent unless `orca serve --trusted-issuer-file` enabled instabox assertions.
   resolveAssertedDevice?: (assertion: string) => TDevice | null
 }):
-  | { ok: true; device: TDevice; clientCapabilities: unknown; viaAssertion?: true }
+  // Fork: `issued` is the device token handed to a client admitted by an instabox assertion.
+  | { ok: true; device: TDevice; clientCapabilities: unknown; issued?: { deviceToken?: string } }
   | { ok: false; code: MobileE2EEAuthFailureCode; deviceId?: string } {
   const auth = classifyE2EEAuth(args.plaintext, args.v2Session)
   if (auth.kind === 'assertion') {
@@ -118,7 +122,12 @@ export function authenticateMobileE2EE<TDevice extends { deviceToken?: string }>
     }
     const device = args.resolveAssertedDevice(auth.assertion)
     return device
-      ? { ok: true, device, clientCapabilities: auth.clientCapabilities, viaAssertion: true }
+      ? {
+          ok: true,
+          device,
+          clientCapabilities: auth.clientCapabilities,
+          issued: instaboxIssuedDeviceToken(device)
+        }
       : { ok: false, code: 'unauthorized' }
   }
   if (auth.kind === 'token') {

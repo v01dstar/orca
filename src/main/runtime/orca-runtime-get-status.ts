@@ -8,12 +8,12 @@ import {
 import { isBrowserIdentityModeStoreInitialized } from '../browser/browser-identity-mode-store'
 import { isInstaboxAssertionAuthEnabled } from './rpc/instabox-assertion-auth'
 import type { RuntimeCapability } from '../../shared/protocol-version'
+import { INSTABOX_ASSERTION_AUTH_RUNTIME_CAPABILITY } from '../../shared/instabox-runtime-capability'
 import {
   BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY,
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
   BROWSER_HEADLESS_RUNTIME_CAPABILITY,
   BROWSER_IDENTITY_RUNTIME_CAPABILITY,
-  INSTABOX_ASSERTION_AUTH_RUNTIME_CAPABILITY,
   BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY,
   MANAGED_SERVER_RUNTIME_CAPABILITY,
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,

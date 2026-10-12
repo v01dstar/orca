@@ -1,5 +1,8 @@
 import type { DesktopMobileE2EEV2Session } from './mobile-e2ee-v2-desktop-session'
 import type { ClassifiedE2EEAuth } from './mobile-e2ee-auth-validation'
+import type { DeviceEntry, DeviceRegistry } from '../device-registry'
+import { InstaboxDeviceRegistry } from '../instabox-session-devices'
+import { authenticateInstaboxAssertion } from './instabox-assertion-auth'
 
 const V2_ASSERTION_KEYS = 'hangarAssertion,transcriptHashB64,type,v'
 
@@ -26,4 +29,30 @@ export function classifyInstaboxAssertionAuth(
     auth.transcriptHashB64 === v2Session.transcriptHashB64
     ? { kind: 'assertion', assertion }
     : { kind: 'invalid' }
+}
+
+/** The registry row for a verified assertion's session, or null to refuse the client. */
+export function resolveInstaboxSessionDevice(
+  registry: DeviceRegistry,
+  trustedIssuerFile: string,
+  assertion: string
+): DeviceEntry | null {
+  const claims = authenticateInstaboxAssertion(assertion, trustedIssuerFile)
+  if (!claims || !(registry instanceof InstaboxDeviceRegistry)) {
+    return null
+  }
+  try {
+    return registry.getOrCreateInstaboxDevice(claims.sid, claims.scope)
+  } catch (error) {
+    // Why: an unwritable registry must refuse the client, not throw out of the handshake.
+    console.error('[instabox] Failed to record an instabox session device:', error)
+    return null
+  }
+}
+
+/** A client admitted by an assertion holds no token; it keeps this one for its later sockets. */
+export function instaboxIssuedDeviceToken(device: { deviceToken?: string }): {
+  deviceToken?: string
+} {
+  return device.deviceToken ? { deviceToken: device.deviceToken } : {}
 }

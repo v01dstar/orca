@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { DeviceRegistry } from './device-registry'
+import { InstaboxDeviceRegistry } from './instabox-session-devices'
 
 describe('DeviceRegistry instabox session devices', () => {
   let dir: string
@@ -15,14 +15,14 @@ describe('DeviceRegistry instabox session devices', () => {
   })
 
   it('reuses one persisted row per session and scope', () => {
-    const registry = new DeviceRegistry(dir)
+    const registry = new InstaboxDeviceRegistry(dir)
     const desktop = registry.getOrCreateInstaboxDevice('sid-1', 'runtime')
     expect(registry.getOrCreateInstaboxDevice('sid-1', 'runtime')).toEqual(desktop)
     expect(registry.getOrCreateInstaboxDevice('sid-1', 'mobile').deviceId).not.toBe(
       desktop.deviceId
     )
 
-    const reloaded = new DeviceRegistry(dir)
+    const reloaded = new InstaboxDeviceRegistry(dir)
     expect(reloaded.getOrCreateInstaboxDevice('sid-1', 'runtime')).toMatchObject({
       deviceId: desktop.deviceId,
       token: desktop.token,
@@ -32,7 +32,7 @@ describe('DeviceRegistry instabox session devices', () => {
   })
 
   it('is never mistaken for an unscanned pairing token', () => {
-    const registry = new DeviceRegistry(dir)
+    const registry = new InstaboxDeviceRegistry(dir)
     const instabox = registry.getOrCreateInstaboxDevice('sid-1', 'runtime')
     expect(instabox.lastSeenAt).toBeGreaterThan(0)
 
@@ -45,7 +45,7 @@ describe('DeviceRegistry instabox session devices', () => {
   it('drops session rows unseen for 30 days when a new session arrives', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-01-01T00:00:00Z'))
-    const registry = new DeviceRegistry(dir)
+    const registry = new InstaboxDeviceRegistry(dir)
     const stale = registry.getOrCreateInstaboxDevice('sid-old', 'runtime')
     const paired = registry.addDevice('Phone', 'mobile')
 
