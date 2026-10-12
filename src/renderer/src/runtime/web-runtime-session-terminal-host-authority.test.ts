@@ -15,6 +15,7 @@ import {
   resetTerminalCreateEnvironment,
   stubTerminalCreateEnvironment
 } from './web-runtime-session-test-harness'
+import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
 
 const mocks = vi.hoisted(() => ({
   getState: vi.fn(),
@@ -100,9 +101,7 @@ describe('createWebRuntimeSessionTerminal', () => {
         result: { tab: { id: 'host-tab-1', leafId: 'host-leaf-1' } }
       })
       .mockResolvedValueOnce({ id: 'list', ok: true, result: makeSnapshot() })
-    vi.stubGlobal('window', {
-      api: { runtimeEnvironments: { call: runtimeCall } }
-    })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall })
 
     await expect(
       createWebRuntimeSessionTerminal({
@@ -164,9 +163,7 @@ describe('createWebRuntimeSessionTerminal', () => {
         }
         return { id: 'list', ok: true, result: makeSnapshot() }
       })
-      vi.stubGlobal('window', {
-        api: { runtimeEnvironments: { call: runtimeCall } }
-      })
+      stubRuntimeEnvironmentBridge({ call: runtimeCall })
 
       await expect(
         createWebRuntimeSessionTerminal({
@@ -255,9 +252,7 @@ describe('createWebRuntimeSessionTerminal', () => {
         }
         return { id: 'list', ok: true, result: makeSnapshot() }
       })
-      vi.stubGlobal('window', {
-        api: { runtimeEnvironments: { call: runtimeCall } }
-      })
+      stubRuntimeEnvironmentBridge({ call: runtimeCall })
 
       await expect(
         createWebRuntimeSessionTerminal({
@@ -334,13 +329,7 @@ describe('createWebRuntimeSessionTerminal', () => {
         result: snapshot
       })
 
-    vi.stubGlobal('window', {
-      api: {
-        runtimeEnvironments: {
-          call: runtimeCall
-        }
-      }
-    })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall })
 
     await expect(
       createWebRuntimeSessionTerminal({
@@ -449,9 +438,7 @@ describe('createWebRuntimeSessionTerminal', () => {
         }
         return { id: 'ok', ok: true, result: makeSnapshot() }
       })
-      vi.stubGlobal('window', {
-        api: { runtimeEnvironments: { call: runtimeCall } }
-      })
+      stubRuntimeEnvironmentBridge({ call: runtimeCall })
 
       await expect(
         createWebRuntimeSessionTerminal({
@@ -509,9 +496,7 @@ describe('createWebRuntimeSessionTerminal', () => {
       }
       return { id: 'list', ok: true, result: makeSnapshot() }
     })
-    vi.stubGlobal('window', {
-      api: { runtimeEnvironments: { call: runtimeCall } }
-    })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall })
 
     await expect(
       createWebRuntimeSessionTerminal({
@@ -557,9 +542,7 @@ describe('createWebRuntimeSessionTerminal', () => {
       }
       return { id: 'list', ok: true, result: makeSnapshot() }
     })
-    vi.stubGlobal('window', {
-      api: { runtimeEnvironments: { call: runtimeCall } }
-    })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall })
 
     await expect(
       createWebRuntimeAgentSessionTerminal({
@@ -619,9 +602,7 @@ describe('createWebRuntimeSessionTerminal', () => {
       }
       return { id: 'list', ok: true, result: makeSnapshot() }
     })
-    vi.stubGlobal('window', {
-      api: { runtimeEnvironments: { call: runtimeCall } }
-    })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall })
 
     await expect(
       createWebRuntimeAgentSessionTerminalWithLaunchDraft({

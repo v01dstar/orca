@@ -10,9 +10,14 @@ import {
   fakeClaude,
   identityFor,
   PROVIDER_SESSION_ID,
-  tick
+  tick,
+  claudeStartupSettled
 } from './claude-structured-session-test-support'
 import { invokeCanUseTool } from './claude-can-use-tool-test-support'
+import {
+  claudeProviderHandle,
+  claudeProviderHandleLeafUuid
+} from '../../shared/agent-session-provider-handle-encoding'
 
 describe('ClaudeStructuredSessionAdapter close and exit recovery', () => {
   it('shares concurrent close finalization and emits lifecycle once', async () => {
@@ -296,9 +301,9 @@ describe('ClaudeStructuredSessionAdapter close and exit recovery', () => {
     let durableLeafUuid: string | null = null
     const resolveLaunch = vi.fn(async ({ identity }) => {
       if (
-        identity.providerHandle.kind !== 'claude' ||
-        identity.providerHandle.sessionId !== PROVIDER_SESSION_ID ||
-        identity.providerHandle.leafUuid !== durableLeafUuid
+        !identity.providerHandle ||
+        identity.providerHandle.nativeId !== PROVIDER_SESSION_ID ||
+        claudeProviderHandleLeafUuid(identity.providerHandle) !== durableLeafUuid
       ) {
         throw new Error('claude durable resume identity changed before spawn')
       }
@@ -345,7 +350,7 @@ describe('ClaudeStructuredSessionAdapter close and exit recovery', () => {
       spawnToken: 'spawn-9',
       events: journalSink
     })
-    await adapter.awaitStarted('session-1')
+    await claudeStartupSettled(adapter, 'session-1')
     const first = claude.connections[0]
     const oldPrompt = invokeCanUseTool(first, 'Bash', 'permission-retained', 'tool-retained')
     const oldSession = (
@@ -385,11 +390,7 @@ describe('ClaudeStructuredSessionAdapter close and exit recovery', () => {
     const replacement = await adapter.acquire({
       identity: {
         ...identityFor(),
-        providerHandle: {
-          kind: 'claude',
-          sessionId: PROVIDER_SESSION_ID,
-          leafUuid: 'observed-retained-leaf'
-        }
+        providerHandle: claudeProviderHandle(PROVIDER_SESSION_ID, 'observed-retained-leaf')
       },
       fence: 8,
       spawnToken: 'spawn-10',
@@ -411,11 +412,7 @@ describe('ClaudeStructuredSessionAdapter close and exit recovery', () => {
     expect(resolveLaunch).toHaveBeenNthCalledWith(2, {
       identity: {
         ...identityFor(),
-        providerHandle: {
-          kind: 'claude',
-          sessionId: PROVIDER_SESSION_ID,
-          leafUuid: 'observed-retained-leaf'
-        }
+        providerHandle: claudeProviderHandle(PROVIDER_SESSION_ID, 'observed-retained-leaf')
       }
     })
     expect(oldPrompt.settled()).toBe(true)
@@ -432,11 +429,7 @@ describe('ClaudeStructuredSessionAdapter close and exit recovery', () => {
       }
     ])
     expect(replacement.link).toMatchObject({
-      handle: {
-        provider: 'claude',
-        sessionId: PROVIDER_SESSION_ID,
-        leafUuid: 'observed-retained-leaf'
-      },
+      handle: claudeProviderHandle(PROVIDER_SESSION_ID, 'observed-retained-leaf'),
       origin: 'resumed',
       mintedAtFence: 8
     })

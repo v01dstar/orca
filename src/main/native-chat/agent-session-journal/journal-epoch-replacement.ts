@@ -10,11 +10,14 @@ import type {
   AgentJournalTurnScope,
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
+import { agentSessionJournalProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import type { JournalHostDatabase } from './journal-host-database'
 import type { JournalLoad } from './journal-open'
 import { applyJournalRow, createJournalReducerState } from './journal-reducer'
 import { buildJournalItemRow, journalRowBase } from './journal-row-builders'
 import {
+  buildJournalQueueReopenRow,
+  buildJournalQueueClearRow,
   buildJournalQueueResumeRow,
   buildJournalStopEventRow
 } from './journal-stop-and-resume-rows'
@@ -56,7 +59,7 @@ export function replaceJournalEpoch(input: {
   const epochRow: JournalRow = {
     kind: 'epoch',
     reason: input.reason,
-    providerHandle: input.identity.providerHandle,
+    providerHandle: agentSessionJournalProviderHandle(input.identity),
     ...journalRowBase(epoch, 1, input.fence, input.now())
   }
   const rows: JournalRow[] = [epochRow]
@@ -76,7 +79,7 @@ export function replaceJournalEpoch(input: {
     applyJournalRow(state, row)
     rows.push(row)
   }
-  const { lifted, liveStop } = input.queuePause
+  const { lifted, liveStop, reopened } = input.queuePause
   const place = () => ({ state, seq: state.lastSequence + 1, fence: input.fence, ts: input.now() })
   if (lifted) {
     const row = buildJournalQueueResumeRow(place())
@@ -85,6 +88,16 @@ export function replaceJournalEpoch(input: {
   }
   if (liveStop) {
     const row = buildJournalStopEventRow({ ...place(), event: liveStop })
+    applyJournalRow(state, row)
+    rows.push(row)
+  }
+  if (reopened) {
+    const row = buildJournalQueueReopenRow(place())
+    applyJournalRow(state, row)
+    rows.push(row)
+  }
+  if (input.queuePause.cleared) {
+    const row = buildJournalQueueClearRow({ ...place(), clear: input.queuePause.cleared })
     applyJournalRow(state, row)
     rows.push(row)
   }

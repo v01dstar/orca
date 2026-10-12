@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import { registerRuntimeTerminalTab } from '@/runtime/sync-runtime-graph'
+import { registerRuntimeTerminalTab } from '@/runtime/mounted-terminal-tab-registry'
 import { awaitsCodexRestartAnswer, blocksCodexPaneInput } from '../codex-restart-notice-state'
 import { ptyDataHandlers } from './pty-dispatcher'
 import { deliverPtyExitToHandlers } from './pty-exit-delivery'
@@ -126,6 +126,8 @@ describe('codex detached pane restart executor', () => {
         initiallyHidden: true
       })
     )
+    // The leaf is in the root, so main already knows where it goes.
+    expect(vi.mocked(window.api.pty.spawn).mock.calls[0]?.[0]).not.toHaveProperty('placement')
     expect(window.api.pty.getSize).not.toHaveBeenCalled()
     expect(vi.mocked(window.api.pty.spawn).mock.calls[0]?.[0]?.env).toEqual(
       expect.objectContaining({
@@ -310,7 +312,7 @@ describe('codex detached pane restart executor', () => {
       })
     )
     expect(window.api.pty.spawn).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ replacesPtyId: OLD_PTY })
+      expect.objectContaining({ replacesPtyId: OLD_PTY, placement: { kind: 'root' } })
     )
   })
 

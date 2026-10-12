@@ -13,6 +13,7 @@ import {
   type RemoteRuntimeMultiplexedTerminal
 } from './remote-runtime-terminal-multiplexer'
 import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
+import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
 
 // Why: the client used to collapse every unusable snapshot reply to `null`, so a slow
 // host and a genuinely empty pane were indistinguishable. These tests pin the reason
@@ -146,19 +147,15 @@ describe('remote terminal snapshot outcome reasons', () => {
     vi.clearAllMocks()
     resetRemoteRuntimeTerminalMultiplexersForTests()
     replaceRuntimeEnvironmentRevisions([])
-    vi.stubGlobal('window', {
-      api: {
-        runtimeEnvironments: {
-          subscribe: vi.fn(async (_args: unknown, callbacks: SubscribeCallbacks) => {
-            server = new ScriptedSnapshotServer((bytes) => callbacks.onBinary?.(bytes))
-            queueMicrotask(() => callbacks.onResponse({ ok: true, result: { type: 'ready' } }))
-            return {
-              unsubscribe: vi.fn(),
-              sendBinary: (bytes: Uint8Array<ArrayBufferLike>) => server.receive(bytes)
-            }
-          })
+    stubRuntimeEnvironmentBridge({
+      subscribe: vi.fn(async (_args: unknown, callbacks: SubscribeCallbacks) => {
+        server = new ScriptedSnapshotServer((bytes) => callbacks.onBinary?.(bytes))
+        queueMicrotask(() => callbacks.onResponse({ ok: true, result: { type: 'ready' } }))
+        return {
+          unsubscribe: vi.fn(),
+          sendBinary: (bytes: Uint8Array<ArrayBufferLike>) => server.receive(bytes)
         }
-      }
+      })
     })
   })
 

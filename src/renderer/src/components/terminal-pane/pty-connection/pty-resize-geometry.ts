@@ -1,3 +1,4 @@
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
 import type { ManagedPaneInternal } from '@/lib/pane-manager/pane-manager-types'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
 import { requestStablePaneFit } from '@/lib/pane-manager/pane-fit-resize-observer'
@@ -8,7 +9,6 @@ import { shouldClaimRemoteDesktopViewport } from '../remote-desktop-viewport-cla
 import { deferTerminalGeometryMutationDuringRebuild } from '@/lib/pane-manager/terminal-scroll-intent-rebuild'
 import { waitForStableStartupGrid } from '../terminal-startup-grid-settle'
 
-import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
 import { isSetupSplitGeometryReady } from './setup-split-geometry'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
@@ -210,7 +210,7 @@ export function installPtyResizeGeometry(session: ConnectPanePtySession): void {
   session.shouldSettleStartupGridBeforeConnect = (): boolean =>
     Boolean(session.paneStartup?.command) &&
     session.deps.isVisibleRef.current &&
-    !session.connectionId &&
+    !session.unservedSshTargetId &&
     session.runtimeEnvironmentId === null
   session.isStartupGridReadyForConnect = (): boolean => {
     const setupSplitDirection = session.paneStartup?.waitForSetupSplitDirection

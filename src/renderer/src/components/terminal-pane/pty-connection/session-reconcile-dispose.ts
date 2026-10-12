@@ -10,7 +10,7 @@ import { discardTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-s
 import { getProviderSessionClaimKey } from '@/lib/sleeping-agent-pane-ownership'
 import { releaseRendererPtyVisibilityClaim } from '../pty-renderer-delivery-claims'
 
-import { REMOTE_PTY_ID_PREFIX } from './pty-connect-limits'
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
 import { SHIFT_ENTER_RECONFIRM_IDLE_MS } from './foreground-output-scan'
 import type { PanePtyBinding } from './pane-pty-binding'
 
@@ -51,7 +51,7 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
     if (
       !requestedPtyId ||
       requestedPtyId === session.handledExitPtyId ||
-      requestedPtyId.startsWith(REMOTE_PTY_ID_PREFIX) ||
+      isRemoteRuntimePtyId(requestedPtyId) ||
       session.transport.getConnectionId?.() != null
     ) {
       return
@@ -104,6 +104,7 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
       session.claimPendingVisibleRemoteViewport()
       session.ptySizeReassertion.request({ fit: false })
       session.consumeHibernatedAgentWake()
+      session.resumeDeferredSpawnOnReveal()
       session.requestKnownWindowsShiftEnterReconfirmation()
       session.sampleVisiblePaneForegroundAgent()
     },
@@ -174,6 +175,7 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
       session.spawnedFreshPtyId === ptyId && !Number.isFinite(session.lastTerminalInputAt),
     dispose() {
       session.disposed = true
+      session.disposeSpawnDeferral()
       session.startupTiming?.finish('disposed')
       const unsentReplacedPtyId: string | null = session.claimPendingReplacedPtyId()
       if (unsentReplacedPtyId) {
@@ -191,11 +193,6 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
       // Why: a detached client stops observing the pane's bytes, so it must cede
       // agent-status authority back to the host on the next mirrored snapshot.
       session.releaseRendererOwnedAgentStatusPane?.()
-      session.directSshPaneRetrySettlementCancelled = true
-      for (const timer of session.directSshPaneRetrySettlementTimers) {
-        clearTimeout(timer)
-      }
-      session.directSshPaneRetrySettlementTimers.clear()
       // Why: a stalled xterm replay may never reach its finally; release live-frame credit when this renderer no longer owns the stream.
       const queue = session.deferredReattachLiveData
       session.deferredReattachLiveData = null

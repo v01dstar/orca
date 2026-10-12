@@ -5,6 +5,7 @@ import {
   createManagedCommandMatcher,
   getSharedManagedScriptPath,
   isPlainObject,
+  isSafeUnicodeWindowsBatchHookPath,
   MANAGED_HOOK_TIMEOUT_SECONDS,
   removeManagedCommands,
   wrapWindowsPowerShellEncodedCommand,
@@ -13,7 +14,10 @@ import {
   type HooksConfig
 } from '../agent-hooks/installer-utils'
 import { quotePowerShellLiteral } from '../../shared/powershell-native-argument'
-import { wrapRuntimeHomeHookCommand } from '../agent-hooks/runtime-home-hook-command'
+import {
+  wrapRuntimeHomeHookCommand,
+  wrapRuntimeHomePosixHookCommand
+} from '../agent-hooks/runtime-home-hook-command'
 import { wrapWindowsDirectCmdHookCommand } from '../agent-hooks/windows-direct-cmd-hook-command'
 import type { ClaudeManagedHookPlan } from './claude-managed-hook-events'
 
@@ -42,8 +46,8 @@ export const OPENCLAUDE_HOOK_SETTINGS: ClaudeCompatibleHookSettings = {
   usesWindowsCompatLauncher: false
 }
 
-export function getConfigPath(settings = CLAUDE_HOOK_SETTINGS): string {
-  return join(homedir(), settings.configDirName, 'settings.json')
+export function getConfigPath(settings = CLAUDE_HOOK_SETTINGS, configDir?: string): string {
+  return join(configDir ?? join(homedir(), settings.configDirName), 'settings.json')
 }
 
 export function getStatusLineScriptBaseName(settings = CLAUDE_HOOK_SETTINGS): string {
@@ -82,16 +86,34 @@ export function getRemoteConfigPath(remoteHome: string, settings = CLAUDE_HOOK_S
   return `${remoteHome.replace(/\/$/, '')}/${settings.configDirName}/settings.json`
 }
 
+function getScriptBaseName(scriptPath: string): string {
+  const scriptFileName = basename(scriptPath)
+  const extension = extname(scriptFileName)
+  return extension ? scriptFileName.slice(0, -extension.length) : scriptFileName
+}
+
 export function getManagedCommand(
   scriptPath: string,
   options: { neutralJsonWhenMissing?: boolean } = {}
 ): string {
-  const scriptFileName = basename(scriptPath)
-  const extension = extname(scriptFileName)
-  return wrapRuntimeHomeHookCommand(
-    extension ? scriptFileName.slice(0, -extension.length) : scriptFileName,
-    options
-  )
+  return wrapRuntimeHomeHookCommand(getScriptBaseName(scriptPath), options)
+}
+
+export function getManagedEventHook(
+  eventName: string,
+  scriptPath: string,
+  settings = CLAUDE_HOOK_SETTINGS
+): HookCommandConfig {
+  return process.platform === 'win32'
+    ? getManagedLifecycleHook(scriptPath, settings)
+    : buildManagedCommandHook(getRemoteManagedEventCommand(eventName, scriptPath))
+}
+
+// Claude adds the full PostCompact command to the model's context after compaction.
+export function getRemoteManagedEventCommand(eventName: string, scriptPath: string): string {
+  return eventName === 'PostCompact'
+    ? wrapRuntimeHomePosixHookCommand(getScriptBaseName(scriptPath))
+    : getRemoteManagedCommand(scriptPath)
 }
 
 export function getManagedLifecycleHook(
@@ -120,7 +142,9 @@ export function getWindowsManagedLifecycleHook(scriptPath: string): HookCommandC
   }
   return {
     type: 'command',
-    command: wrapWindowsPowerShellEncodedCommand(getWindowsPowerShellLifecycleCommand(scriptPath)),
+    command: wrapWindowsPowerShellEncodedCommand(getWindowsPowerShellLifecycleCommand(scriptPath), {
+      useProcessPolicyEnvironment: isSafeUnicodeWindowsBatchHookPath(scriptPath)
+    }),
     timeout: MANAGED_HOOK_TIMEOUT_SECONDS
   }
 }
@@ -152,7 +176,7 @@ export function getRemoteManagedCommand(scriptPath: string): string {
 
 export function applyManagedHooks(
   config: HooksConfig,
-  hook: HookCommandConfig,
+  hookForEvent: (eventName: string) => HookCommandConfig,
   scriptFileName: string,
   plan: ClaudeManagedHookPlan
 ): HooksConfig {
@@ -162,7 +186,10 @@ export function applyManagedHooks(
   for (const event of plan.install) {
     const current = nextHooks[event.eventName]
     const cleaned = Array.isArray(current) ? removeManagedCommands(current, isManagedCommand) : []
-    const definition: HookDefinition = { ...event.definition, hooks: [hook] }
+    const definition: HookDefinition = {
+      ...event.definition,
+      hooks: [hookForEvent(event.eventName)]
+    }
     nextHooks[event.eventName] = [...cleaned, definition]
   }
 

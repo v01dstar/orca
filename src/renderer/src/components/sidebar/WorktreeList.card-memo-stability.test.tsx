@@ -16,6 +16,7 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 const mockStore = vi.hoisted(() => ({
   state: {} as Record<string, unknown>,
+  setVisibleReviewCardWorktreeIds: vi.fn<(ids: readonly string[]) => void>(),
   activateWorktreeFromSidebar: vi.fn(),
   openModal: vi.fn()
 }))
@@ -111,7 +112,6 @@ vi.mock('@/lib/worktree-activation', () => ({
 }))
 
 vi.mock('@/runtime/runtime-rpc-client', () => ({
-  getActiveRuntimeTarget: () => ({ kind: 'local' }),
   callRuntimeRpc: vi.fn()
 }))
 
@@ -218,6 +218,7 @@ function setFlatWorktreeState(): void {
     remoteBranchConflictByWorktreeId: {},
     reorderRepos: vi.fn(),
     reportVisibleGitHubPRRefreshCandidates: vi.fn(),
+    setVisibleReviewCardWorktreeIds: mockStore.setVisibleReviewCardWorktreeIds,
     repos: [repo],
     retainedAgentsByPaneKey: {},
     revealWorktreeInSidebar: vi.fn(),

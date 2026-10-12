@@ -7,10 +7,11 @@ import type {
 import type { SshConnectionState } from './ssh-types'
 import type { TerminalSideEffectBatch } from './terminal-side-effect-facts'
 import type { RuntimeNativeChatLaunchDraftResolution } from './runtime-types'
+import type { RuntimeNavigationTarget } from './runtime-navigation'
 
 export type RuntimeClientEvent =
   | { type: 'reposChanged' }
-  | { type: 'worktreesChanged'; repoId: string }
+  | { type: 'worktreesChanged'; repoId: string; sortOrderOnly?: boolean }
   | ({ type: 'nativeChatLaunchDraftResolved' } & RuntimeNativeChatLaunchDraftResolution)
   | { type: 'terminalSideEffects'; batch: TerminalSideEffectBatch }
   // Why: SSH connections live on the runtime host; paired clients have no IPC
@@ -45,6 +46,8 @@ export type RuntimeClientEvent =
       setup?: WorktreeSetupLaunch
       startup?: WorktreeStartupLaunch
       defaultTabs?: WorktreeDefaultTabsLaunch
+      /** Absent on older hosts; clients must not infer navigation intent from a broadcast. */
+      navigation?: RuntimeNavigationTarget
     }
 
 export type RuntimeClientEventStreamMessage =
@@ -71,12 +74,14 @@ export function toRuntimeActivateWorktreeEvent(
   worktreeId: string,
   setup?: CreateWorktreeResult['setup'],
   startup?: WorktreeStartupLaunch,
-  defaultTabs?: CreateWorktreeResult['defaultTabs']
+  defaultTabs?: CreateWorktreeResult['defaultTabs'],
+  navigation?: RuntimeNavigationTarget
 ): RuntimeActivateWorktreeEvent {
   return {
     type: 'activateWorktree',
     repoId,
     worktreeId,
+    ...(navigation ? { navigation } : {}),
     ...(setup ? { setup } : {}),
     ...(startup ? { startup } : {}),
     ...(defaultTabs ? { defaultTabs } : {})

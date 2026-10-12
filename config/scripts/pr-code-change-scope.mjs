@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
+import { isLayoutOracleSource } from './pr-layout-oracle-route.mjs'
 
 const DOCS_ONLY_FILES = new Set([
   'README.md',
@@ -30,10 +31,19 @@ export const PR_CHECK_JOBS = [
   'cross-version-wire',
   'managed_hook_node18',
   'package',
-  'package_windows'
+  'package_windows',
+  'layout_oracle'
 ]
 
 const ALWAYS_ON_CODE_JOBS = new Set(['static_analysis', 'typecheck', 'test'])
+
+const MOBILE_CI_TOOL_FILES = new Set([
+  '.github/workflows/mobile.yml',
+  'config/mobile-ci.vitest.config.mjs',
+  'config/scripts/run-mobile-ci-tests.mjs',
+  'config/scripts/mobile-release-check-scope.test.mjs',
+  'config/scripts/mobile-test-change-scope.test.mjs'
+])
 
 const GLOBAL_FORCE_PREFIXES = [
   '.github/workflows/pr.yml',
@@ -51,14 +61,35 @@ const GIT_COMPAT_PREFIXES = [
   'src/shared/review-head-tracking-ref',
   'src/shared/worktree/local-base-branch-fast-forward',
   'src/main/git/',
-  'src/relay/git-',
   'config/scripts/git-binary-compatibility'
 ]
 
 // Why narrow: the contract pins Codex's read-repair, so it runs when the heal that
 // depends on it, its app-server transport, or the contract itself changes. The same
-// job pins --no-daemon for Orca's codex shell wrapper and the project-trust key.
+// job pins --no-daemon for Orca's codex shell wrapper, the project-trust key, and the
+// approval Orca writes for its hook entry in managed Codex homes and ~/.codex.
 const CODEX_INDEX_HEAL_CONTRACT_PREFIXES = [
+  'src/main/codex/codex-hook-file-entry-binary-contract',
+  'src/main/codex/codex-hook-trust-',
+  'src/main/codex/codex-hook-approval-first-write',
+  'src/main/codex/codex-hook-hash-lookup',
+  'src/main/codex/codex-hook-orca-approvals',
+  'src/main/codex/codex-hook-reconcile',
+  'src/main/codex/codex-hook-local-install',
+  'src/main/codex/codex-hook-user-mirroring',
+  'src/main/codex/codex-real-home-hook-',
+  'src/main/codex/codex-real-home-hooks-json',
+  'src/main/codex/codex-user-hook-trust-moves',
+  'src/main/codex/codex-hook-definition',
+  'src/main/codex/codex-hook-command-form',
+  'src/main/codex/codex-hook-identity',
+  'src/main/codex/codex-app-server-client',
+  'src/main/codex/codex-trust-identity',
+  'src/main/codex/config-toml-hook-trust-',
+  'src/main/codex/config-toml-key-path',
+  'src/main/agent-hooks/posix-hook-command',
+  'src/main/agent-hooks/hook-post-command',
+  'src/main/codex-cli/codex-read-only-app-server-args',
   'src/main/agent-trust-presets',
   'src/main/codex/config-toml-trust',
   'src/main/pty/codex-no-daemon-binary-contract',
@@ -70,7 +101,9 @@ const CODEX_INDEX_HEAL_CONTRACT_PREFIXES = [
   'src/main/codex/codex-state-db',
   'src/main/sqlite/sync-database',
   'src/main/codex/codex-app-server-capability-signal',
-  'src/main/codex/codex-process-exit-deadline',
+  'src/main/provider-process/provider-process-exit-deadline',
+  'src/main/provider-process/provider-process-launch',
+  'src/main/provider-process/provider-record-reader',
   'src/main/codex/codex-session-backfill',
   'src/main/codex/codex-session-index-heal-state',
   'src/main/codex-cli/command',
@@ -126,8 +159,7 @@ const ORCAD_BROWSER_PREFIXES = [
 const MOBILE_WEB_APP_PREFIXES = [
   'config/scripts/build-mobile-web-app',
   'config/scripts/run-mobile-web-app-checks',
-  'config/scripts/script-child-process.mjs',
-  'src/shared/child-process/',
+  'src/packages/process-host/',
   'config/scripts/verify-mobile-web-app-bundle',
   'config/scripts/mobile-web-app-',
   'config/scripts/mobile-web-bundle-',
@@ -140,7 +172,9 @@ const MOBILE_WEB_APP_PREFIXES = [
   'mobile/packages/',
   'mobile/package.json',
   'mobile/pnpm-lock.yaml',
-  'mobile/modules/orca-mobile-web-shell/'
+  'mobile/modules/orca-mobile-web-shell/',
+  // Chat visuals on both mobile surfaces are built from it; their in-page links check runs here.
+  'src/shared/native-chat-visual-shell'
 ]
 
 function changesMobileWebApp(changedFiles) {
@@ -169,8 +203,8 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   // fingerprint the host's ledger and journal re-derive.
   'src/shared/structured-agent-session-mutation.ts',
   'src/shared/structured-agent-session-send-mutation.ts',
-  'src/shared/structured-agent-session-outbox.ts',
   'src/shared/agent-session-record',
+  'src/shared/agent-session-provider-handle',
   'src/shared/agent-session-journal-',
   'src/main/ai-vault/structured-session-ownership.ts',
   'src/main/native-chat/agent-session-journal/',
@@ -182,7 +216,6 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   // Run on every request the suites dispatch, whatever its method.
   'src/main/runtime/rpc/core.ts',
   'src/main/runtime/rpc/errors.ts',
-  'src/main/runtime/rpc/rpc-streaming-dispatcher.ts',
   'src/main/runtime/rpc/orchestration-contract-fence.ts',
   'src/main/runtime/rpc/orchestration-session-caller.ts',
   'src/main/runtime/rpc/orchestration-legacy-compatibility.ts',
@@ -190,7 +223,7 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/shared/orchestration-rpc-contract.ts',
   'src/main/runtime/rpc/methods/agent-launch',
   'src/main/runtime/rpc/methods/ai-vault.ts',
-  'src/main/runtime/rpc/methods/browser-tab-create-schema',
+  'src/shared/rpc-contract/browser-tab-create-params',
   'src/main/runtime/rpc/methods/session-tabs.ts',
   'src/main/runtime/rpc/methods/structured-agent-session',
   'src/main/runtime/rpc/methods/terminal',
@@ -206,6 +239,12 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/shared/structured-agent-session-agent-status',
   'src/shared/structured-agent-session-projection',
   'src/shared/workspace-session-sleeping-agents',
+  // A current desktop's launch route against a released server's capabilities (cross-version-paired-structured-launch).
+  'src/shared/structured-native-chat-launch-route.ts',
+  'src/renderer/src/lib/agent-launch-routing.ts',
+  'src/renderer/src/runtime/paired-host-client-capabilities.ts',
+  'src/shared/electron-remote-runtime-client-capabilities.ts',
+  'src/shared/remote-runtime-client-capabilities.ts',
   // An older app opening a newer orchestration database (orchestration-delivery-downgrade).
   'src/main/runtime/orchestration/db.ts',
   'src/main/runtime/orchestration/db/',
@@ -213,9 +252,11 @@ const CROSS_VERSION_WIRE_PREFIXES = [
 ]
 
 const MANAGED_HOOK_PREFIXES = [
-  'config/scripts/smoke-managed-hook-runtime-node18',
+  'config/scripts/smoke-process-host-node18',
+  'config/scripts/packaged-process-host-fixture',
+  'src/packages/process-host/',
   'config/scripts/build-relay',
-  'src/relay/',
+  'src/wsl-guest/',
   'src/shared/agent-hook',
   'src/main/agent-hooks/'
 ]
@@ -289,7 +330,7 @@ const SHARED_PACKAGE_PREFIXES = [
 const LINUX_PACKAGE_PREFIXES = [
   ...SHARED_PACKAGE_PREFIXES,
   'config/scripts/package-linux-formats',
-  'config/scripts/script-child-process.mjs',
+  'config/scripts/process-failure-message.mjs',
   'config/scripts/space-sharing-copy.mjs',
   '.github/actions/prepare-linux-package-fixture/',
   'config/docker/cli-launch-contract/',
@@ -320,28 +361,35 @@ const LINUX_PACKAGE_TESTS = [
   'src/main/browser/browser-route-tcp-egress.electron.test.ts',
   'src/main/browser/browser-route-webrtc-egress.electron.test.ts',
   'src/main/browser/browser-route-h3-egress.electron.test.ts',
-  'src/main/browser/browser-route-dns-prefetch.electron.test.ts'
+  'src/main/browser/browser-route-dns-prefetch.electron.test.ts',
+  'src/main/persistence/profile-state/profile-state-writer-stall.electron.test.ts'
 ]
 
 const WINDOWS_PACKAGE_TESTS = [
+  'src/main/zcode/zcode-plan-api-key-store-native-windows.test.ts',
   ...LINUX_PACKAGE_TESTS,
   'config/scripts/rebuild-native-deps.test.mjs',
   'config/scripts/rebuild-native-deps-windows-process-tree.test.mjs',
   'config/scripts/rebuild-native-deps-node-pty.test.mjs',
   'config/scripts/nsis-process-check.test.mjs',
+  'config/scripts/idle-cpu-process-sampling.test.mjs',
   'config/scripts/ensure-native-runtime-job-ownership.test.mjs',
   'config/scripts/verify-packaged-node-pty-job-ownership.test.mjs',
   'config/scripts/windows-pe-machine.test.mjs',
+  'config/scripts/build-windows-cli-launcher.test.mjs',
   'config/scripts/script-module-dependencies.test.mjs',
   'src/main/windows-registry-addon.test.ts',
   'src/main/providers/windows-conpty-wide-char-duplication.node-pty.test.ts',
   'src/main/providers/pty-repaint-wide-char-buffer.node-pty.test.ts',
-  'src/shared/child-process/windows-command-line.win32.test.ts',
-  'src/shared/child-process/windows-cmd-shim-resolution.test.ts',
-  'src/shared/child-process/windows-cmd-shim-resolution.win32.test.ts',
+  'src/shared/__tests__/process-host/windows-command-line.win32.test.ts',
+  'src/shared/__tests__/process-host/windows-cmd-shim-resolution.test.ts',
+  'src/shared/__tests__/process-host/windows-cmd-shim-resolution.win32.test.ts',
   'src/main/agent-hooks/windows-hook-payload-delivery.test.ts',
   'src/main/jcode/hook-gate-script.test.ts',
   'src/main/agent-hooks/windows-direct-cmd-hook-command.test.ts',
+  'src/main/agent-hooks/windows-cmd-hook-command-unicode.test.ts',
+  'src/main/agent-hooks/windows-batch-hook-launcher.test.ts',
+  'src/main/agent-hooks/windows-powershell-hook-launcher.test.ts',
   'src/main/codex/windows-hook-command.test.ts',
   'src/main/codex/windows-hook-upgrade.test.ts',
   'src/main/codex/hook-service-managed-install.test.ts',
@@ -355,7 +403,6 @@ const WINDOWS_PACKAGE_TESTS = [
   'src/main/windows-live-tree-kill.win32.test.ts',
   'src/main/wsl/wsl-runner.test.ts',
   'src/main/wsl/wsl-guest-environment.test.ts',
-  'src/main/wsl/wsl-invocation-boundary.test.ts',
   'src/main/wsl/wsl-executable-path.win32.test.ts',
   'src/main/wsl/wsl-w1-w3-contract.test.ts',
   'src/shared/source-scan/source-tree-scan.test.ts',
@@ -373,8 +420,6 @@ const WINDOWS_PACKAGE_TESTS = [
   'src/main/ipc/pty-spawn-env-codex-resume-provenance.test.ts',
   'src/main/ipc/preflight-provider-command-selection.test.ts',
   'src/main/ipc/preflight-runnable-local-cli.test.ts',
-  'src/relay/windows-port-scan.win32.test.ts',
-  'src/main/ssh/ssh-relay-upload-stage-windows-identity.test.ts',
   'src/main/ssh/remote-node-runtime-store-windows.test.ts'
 ]
 
@@ -457,14 +502,43 @@ export function needsMobileDependencies(changedFiles) {
   return changedFiles.length === 0 || changedFiles.some((file) => file.startsWith('mobile/'))
 }
 
-export function classifyPrJobs(changedFiles) {
+export const DAEMON_INIT_TEST_SUPPORT = 'src/main/daemon/daemon-init-dependency-mocks.ts'
+
+const DAEMON_INIT_TEST_SCOPE = new Set([
+  DAEMON_INIT_TEST_SUPPORT,
+  'src/main/native-chat/agent-session-wire/structured-agent-session-claude-queued-stop.test.ts',
+  'config/scripts/process-host-build-dist.test.mjs',
+  'src/main/codex/codex-app-server-connection.test.ts'
+])
+
+export function isDaemonInitTestSupportChange(files, modifiedOnly = false) {
+  return (
+    modifiedOnly &&
+    files.includes(DAEMON_INIT_TEST_SUPPORT) &&
+    new Set(files).size === files.length &&
+    files.every((file) => DAEMON_INIT_TEST_SCOPE.has(file))
+  )
+}
+
+export function classifyPrJobs(
+  changedFiles,
+  { allowMobileCiTools = false, allowDaemonInitTestSupport = false } = {}
+) {
   const emptyDiff = changedFiles.length === 0
   const shouldRun = shouldRunPrChecks(changedFiles)
   const forceAll = emptyDiff || changedFiles.some(isGlobalForcePath)
+  const bundleFiles = isDaemonInitTestSupportChange(changedFiles, allowDaemonInitTestSupport)
+    ? changedFiles.filter((file) => file !== DAEMON_INIT_TEST_SUPPORT)
+    : changedFiles
   const jobs = Object.fromEntries(
     PR_CHECK_JOBS.map((job) => [
       job,
-      shouldRun && (forceAll || ALWAYS_ON_CODE_JOBS.has(job) || jobDetector(job)(changedFiles))
+      shouldRun &&
+        (forceAll ||
+          ALWAYS_ON_CODE_JOBS.has(job) ||
+          jobDetector(job)(
+            ['package', 'package_windows'].includes(job) ? bundleFiles : changedFiles
+          ))
     ])
   )
   // Why outside should_run: a mobile-only diff is desktop-irrelevant and skips every job above,
@@ -475,8 +549,15 @@ export function classifyPrJobs(changedFiles) {
   // that is exactly the diff that changes the page this job builds. Gated on should_run it would
   // skip on every PR that can break it and run on none.
   jobs.mobile_web_app = jobs.mobile_web_app || changesMobileWebApp(changedFiles)
+  const mobileCiTools =
+    allowMobileCiTools &&
+    !emptyDiff &&
+    jobs.test &&
+    (jobs.static_analysis || jobs.typecheck) &&
+    changedFiles.every((file) => MOBILE_CI_TOOL_FILES.has(file))
   return {
     should_run: shouldRun,
+    mobile_ci_tools: mobileCiTools,
     native_cache_changed: shouldRun && (emptyDiff || changedFiles.some(isNativeCacheInputPath)),
     mobile_dependencies:
       (shouldRun || jobs.static_analysis) && needsMobileDependencies(changedFiles),
@@ -490,7 +571,11 @@ function jobDetector(job) {
       return (files) => files.some((file) => matchesPrefix(file, GIT_COMPAT_PREFIXES))
     case 'codex_index_heal_contract':
       return (files) =>
-        files.some((file) => matchesPrefix(file, CODEX_INDEX_HEAL_CONTRACT_PREFIXES))
+        files.some(
+          (file) =>
+            file !== 'src/main/codex/codex-app-server-client.test.ts' &&
+            matchesPrefix(file, CODEX_INDEX_HEAL_CONTRACT_PREFIXES)
+        )
     case 'xterm_patch_sync':
       return (files) => files.some((file) => matchesPrefix(file, XTERM_PREFIXES))
     case 'shell_contracts':
@@ -509,6 +594,8 @@ function jobDetector(job) {
       return (files) => files.some(isLinuxPackagePath)
     case 'package_windows':
       return (files) => files.some(isWindowsPackagePath)
+    case 'layout_oracle':
+      return (files) => files.some(isLayoutOracleSource)
     default:
       return () => true
   }
@@ -532,8 +619,20 @@ function isProductBundlePath(file, extraPrefixes) {
   return matchesPrefix(file, extraPrefixes)
 }
 
+// These shared fixtures are consumed only by unit tests.
+export function isUnitTestSupportSource(file) {
+  return (
+    file === 'src/renderer/src/runtime/web-session-tabs-sync-test-harness.ts' ||
+    file === 'src/renderer/src/components/native-chat/NativeChatStructuredSession.test-harness.tsx'
+  )
+}
+
 function isTestFile(file) {
-  return /\.(?:test|spec)\.(?:js|cjs|mjs|ts|tsx)$/.test(file) || file.includes('/__tests__/')
+  return (
+    isUnitTestSupportSource(file) ||
+    /\.(?:test|spec)\.(?:js|cjs|mjs|ts|tsx)$/.test(file) ||
+    file.includes('/__tests__/')
+  )
 }
 
 function isDesktopIrrelevantPath(file) {
@@ -568,7 +667,10 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     input += chunk
   }
   const files = input.split(/\r?\n/).filter(Boolean)
-  const classification = classifyPrJobs(files)
+  const classification = classifyPrJobs(files, {
+    allowMobileCiTools: process.argv.includes('--mobile-ci-tools'),
+    allowDaemonInitTestSupport: process.argv.includes('--daemon-init-test-support')
+  })
   for (const [name, value] of Object.entries(classification)) {
     process.stdout.write(`${name}=${value ? 'true' : 'false'}\n`)
   }

@@ -1,6 +1,6 @@
 // Why: this channel keeps E2EE framing out of RPC handlers, which consume plaintext across transports.
 import type { WebSocket } from 'ws'
-import { deriveSharedKey, encrypt, decrypt, encryptBytes, decryptBytes } from './e2ee-crypto'
+import { deriveSharedKey, encrypt, decrypt, decryptBytes } from './e2ee-crypto'
 import {
   DesktopMobileE2EEV2Session,
   type DesktopMobileE2EEV2Context
@@ -10,29 +10,38 @@ import { handleDesktopMobileE2EEV2Inbound } from './mobile-e2ee-v2-desktop-inbou
 import {
   authenticateMobileE2EE,
   decodeMobileE2EEPublicKey,
-  e2eeAuthenticatedControl,
-  type E2EEDeviceResolvers
+  describeMobileE2EEAuthFailure,
+  type DeviceKeyResolution,
+  type DeviceTokenRefusal
 } from './mobile-e2ee-auth-validation'
-import {
-  isMobileE2EEBinaryPayloadWithinLimit,
-  isMobileE2EEOutboundItemWithinLimit,
-  isMobileE2EETextPayloadWithinLimit
-} from './mobile-e2ee-outbound-admission'
+import { isMobileE2EEOutboundItemWithinLimit } from './mobile-e2ee-outbound-admission'
 import { parseRemoteRuntimeJsonText } from '../../../shared/remote-runtime-request-frames'
 import type { MobileE2EEOutboundMemoryBudget } from './mobile-e2ee-outbound-memory-budget'
 import { MobileE2EEDesktopOutboundOwner } from './mobile-e2ee-desktop-outbound-owner'
+import { createLegacyReplySenders } from './mobile-e2ee-legacy-reply-senders'
 import { parseRuntimeClientCapabilities } from './runtime-client-capabilities'
+import type {
+  RpcBinarySendOptions,
+  RpcBinarySendResult,
+  RpcBinarySender
+} from './rpc-binary-sender'
 import type { RuntimeCapability } from '../../../shared/protocol-version'
 import type { EventProps } from '../../../shared/telemetry-events'
 import { track } from '../../telemetry/client'
+import type { DevicePrincipal } from '../device-principal'
 
 type OutboundBudgetEmitter = EventProps<'remote_outbound_budget_close'>['emitter']
 
 const HANDSHAKE_TIMEOUT_MS = 10_000
 const MAX_CONSECUTIVE_DECRYPT_FAILURES = 5
 
-export type E2EEChannelOptions = E2EEDeviceResolvers<E2EEAuthenticatedDevice> & {
+export type E2EEChannelOptions = {
   serverSecretKey: Uint8Array
+  resolveAuthenticatedDevice: (token: string) => E2EEAuthenticatedDevice | DeviceTokenRefusal | null
+  // Absent: key auth is refused as bad_auth, the same as before device keys existed.
+  resolveAuthenticatedDeviceKey?: (deviceId: string) => DeviceKeyResolution<E2EEAuthenticatedDevice>
+  // Fork: instabox assertion auth; absent unless `orca serve --trusted-issuer-file`.
+  resolveAssertedDevice?: (assertion: string) => E2EEAuthenticatedDevice | null
   onReady: (channel: E2EEChannel, device: E2EEAuthenticatedDevice) => void
   onError: (code: number, reason: string) => void
   transportContext?: DesktopMobileE2EEV2Context
@@ -40,10 +49,9 @@ export type E2EEChannelOptions = E2EEDeviceResolvers<E2EEAuthenticatedDevice> & 
   outboundMemoryBudget?: MobileE2EEOutboundMemoryBudget
 }
 
-export type E2EEAuthenticatedDevice = {
-  deviceId: string
-  deviceToken: string
-  scope: 'mobile' | 'runtime'
+export type E2EEAuthenticatedDevice = DevicePrincipal & {
+  // Absent for a keyed row, which never presented a bearer.
+  deviceToken?: string
 }
 
 export class E2EEChannel {
@@ -53,7 +61,10 @@ export class E2EEChannel {
   private handshakeTimer: ReturnType<typeof setTimeout> | null = null
   private readonly ws: WebSocket
   private readonly serverSecretKey: Uint8Array
-  private readonly resolvers: E2EEDeviceResolvers<E2EEAuthenticatedDevice>
+  private readonly resolvers: Pick<
+    E2EEChannelOptions,
+    'resolveAuthenticatedDevice' | 'resolveAuthenticatedDeviceKey' | 'resolveAssertedDevice'
+  >
   private readonly onReady: (channel: E2EEChannel, device: E2EEAuthenticatedDevice) => void
   private readonly onError: (code: number, reason: string) => void
   private readonly transportContext: DesktopMobileE2EEV2Context
@@ -65,12 +76,17 @@ export class E2EEChannel {
     | ((
         plaintext: string,
         encryptedReply: (response: string) => void,
-        encryptedBinaryReply: (response: Uint8Array<ArrayBufferLike>) => boolean | void
+        encryptedBinaryReply: RpcBinarySender
       ) => void)
     | null = null
   private binaryMessageHandler: ((plaintext: Uint8Array<ArrayBufferLike>) => void) | null = null
 
   deviceToken: string | null = null
+
+  /** The v2 transcript this socket authenticated under; null on legacy framing. */
+  get transcriptHashB64(): string | null {
+    return this.v2Session?.transcriptHashB64 ?? null
+  }
   authenticatedDevice: E2EEAuthenticatedDevice | null = null
   clientCapabilities: readonly RuntimeCapability[] = []
 
@@ -82,7 +98,12 @@ export class E2EEChannel {
     this.onError = options.onError
     this.transportContext = options.transportContext ?? { transport: 'direct' }
     this.requireV2 = options.requireV2 ?? false
-    this.outbound = new MobileE2EEDesktopOutboundOwner(ws, options.outboundMemoryBudget)
+    this.outbound = new MobileE2EEDesktopOutboundOwner(
+      ws,
+      () => Boolean(this.sharedKey),
+      () => this.closeForOutboundBudget('queue'),
+      options.outboundMemoryBudget
+    )
 
     this.handshakeTimer = setTimeout(() => {
       this.onError(4002, 'E2EE handshake timeout')
@@ -93,7 +114,7 @@ export class E2EEChannel {
     handler: (
       plaintext: string,
       encryptedReply: (response: string) => void,
-      encryptedBinaryReply: (response: Uint8Array<ArrayBufferLike>) => boolean | void
+      encryptedBinaryReply: RpcBinarySender
     ) => void
   ): void {
     this.messageHandler = handler
@@ -149,36 +170,13 @@ export class E2EEChannel {
       return
     }
 
-    // Why: streaming emits can outlive destroy(), so late replies must not encrypt with a cleared key.
-    const encryptedReply = (response: string) => {
-      if (!this.sharedKey || this.ws.readyState !== this.ws.OPEN) {
-        return
-      }
-      if (!isMobileE2EETextPayloadWithinLimit(response)) {
-        this.closeForOutboundBudget('size')
-        return
-      }
-      this.outbound.enqueueLegacyText(
-        encrypt(response, this.sharedKey),
-        () => Boolean(this.sharedKey),
-        () => this.closeForOutboundBudget('queue')
-      )
-    }
-    const encryptedBinaryReply = (response: Uint8Array<ArrayBufferLike>): boolean => {
-      if (!this.sharedKey || this.ws.readyState !== this.ws.OPEN) {
-        return false
-      }
-      if (!isMobileE2EEBinaryPayloadWithinLimit(response)) {
-        this.closeForOutboundBudget('size')
-        return false
-      }
-      if (!this.outbound.canSend(response.byteLength + 40)) {
-        return false
-      }
-      this.ws.send(Buffer.from(encryptBytes(response, this.sharedKey)), { binary: true })
-      return true
-    }
-    this.messageHandler?.(plaintext, encryptedReply, encryptedBinaryReply)
+    const reply = createLegacyReplySenders({
+      ws: this.ws,
+      outbound: this.outbound,
+      getSharedKey: () => this.sharedKey,
+      onOversize: () => this.closeForOutboundBudget('size')
+    })
+    this.messageHandler?.(plaintext, reply.text, reply.binary)
   }
 
   private trackDecryptFailure(): void {
@@ -248,17 +246,20 @@ export class E2EEChannel {
     const authentication = authenticateMobileE2EE({
       plaintext,
       v2Session: this.v2Session,
-      ...this.resolvers
+      resolveDevice: this.resolvers.resolveAuthenticatedDevice,
+      resolveDeviceKey: this.resolvers.resolveAuthenticatedDeviceKey,
+      resolveAssertedDevice: this.resolvers.resolveAssertedDevice
     })
     if (!authentication.ok) {
-      this.sendEncryptedControl({ type: 'e2ee_error', error: { code: authentication.code } })
-      this.onError(4001, authentication.code === 'bad_auth' ? 'Invalid e2ee_auth' : 'Unauthorized')
+      const failure = describeMobileE2EEAuthFailure(authentication)
+      this.sendEncryptedControl(failure.sealedError)
+      this.onError(4001, failure.closeReason)
       return
     }
     const authenticatedDevice = authentication.device
 
-    this.clientCapabilities = parseRuntimeClientCapabilities(authentication.auth.clientCapabilities)
-    this.deviceToken = authenticatedDevice.deviceToken
+    this.clientCapabilities = parseRuntimeClientCapabilities(authentication.clientCapabilities)
+    this.deviceToken = authenticatedDevice.deviceToken ?? null
     this.authenticatedDevice = authenticatedDevice
     this.state = 'ready'
 
@@ -271,8 +272,21 @@ export class E2EEChannel {
     // authentication success; relay sockets additionally bind this context to
     // their immutable relayDeviceId in the resolver.
     this.onReady(this, authenticatedDevice)
+    // Why: a client admitted by an instabox assertion holds no device token; it keeps this one so its
+    // later sockets authenticate like a paired device (each still needs an instabox tunnel ticket).
+    const issued =
+      authentication.viaAssertion && authenticatedDevice.deviceToken
+        ? { deviceToken: authenticatedDevice.deviceToken }
+        : {}
     this.sendEncryptedControl(
-      e2eeAuthenticatedControl(this.v2Session, authentication.auth, authenticatedDevice.deviceToken)
+      this.v2Session
+        ? {
+            type: 'e2ee_authenticated',
+            v: 2,
+            transcriptHashB64: this.v2Session.transcriptHashB64,
+            ...issued
+          }
+        : { type: 'e2ee_authenticated', ...issued }
     )
   }
 
@@ -289,13 +303,13 @@ export class E2EEChannel {
         this.messageHandler?.(
           plaintext,
           (response) => this.enqueueV2({ kind: 'text', plaintext: response }),
-          (response) => this.enqueueV2({ kind: 'binary', plaintext: response })
+          (response, options) => this.enqueueV2({ kind: 'binary', plaintext: response }, options)
         ),
       onProtocolError: () => this.onError(4001, 'Invalid binary message before authentication')
     })
   }
 
-  private enqueueV2(item: V2OutboundItem): boolean {
+  private enqueueV2(item: V2OutboundItem, options?: RpcBinarySendOptions): RpcBinarySendResult {
     if (!this.v2Session || this.ws.readyState !== this.ws.OPEN) {
       return false
     }
@@ -303,7 +317,7 @@ export class E2EEChannel {
       this.closeForOutboundBudget('size')
       return false
     }
-    return this.outbound.enqueueV2(item, this.v2Session, () => this.closeForOutboundBudget('queue'))
+    return this.outbound.enqueueV2(item, this.v2Session, options)
   }
 
   // Why: this close kills the whole remote session. `size` means a producer emitted something
@@ -322,7 +336,7 @@ export class E2EEChannel {
       this.enqueueV2({ kind: 'text', plaintext: JSON.stringify(message) })
     } else if (this.ws.readyState === this.ws.OPEN && this.sharedKey) {
       const frame = encrypt(JSON.stringify(message), this.sharedKey)
-      this.outbound.sendLegacyFrame(frame, () => this.closeForOutboundBudget('queue'))
+      this.outbound.sendLegacyFrame(frame)
     }
   }
 

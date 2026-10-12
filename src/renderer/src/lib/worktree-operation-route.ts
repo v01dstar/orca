@@ -5,6 +5,7 @@ import {
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { getRepoIdFromWorktreeId } from '@/store/slices/worktree-helpers'
 import { resolveExactWorktreeRoute } from './worktree-owner-route'
 import {
@@ -13,6 +14,7 @@ import {
   resolveIndexedWorktreeOwner
 } from './worktree-runtime-owner-index'
 import { resolveExplicitWorktreeOperationRouteResult } from './worktree-operation-catalog-route'
+import { onPairedWebClientHost } from './paired-web-client-host'
 import {
   findFolderWorkspaceOwner,
   getExecutionHostIdForFolderWorkspace,
@@ -24,6 +26,15 @@ export { resolveExplicitWorktreeOperationRouteResult } from './worktree-operatio
 export type WorktreeOperationRoute = {
   executionHostId: ExecutionHostId | null
   runtimeEnvironmentId: string | null
+}
+
+/** The floating workspace has no host record; its files always live on this machine. */
+export function getFloatingWorkspaceOperationRoute(
+  worktreeId: string
+): WorktreeOperationRoute | null {
+  return worktreeId === FLOATING_TERMINAL_WORKTREE_ID
+    ? { executionHostId: LOCAL_EXECUTION_HOST_ID, runtimeEnvironmentId: null }
+    : null
 }
 
 export type WorktreeOperationRouteResolution =
@@ -125,6 +136,45 @@ export function resolveWorktreeOperationRouteForHost(
 }
 
 /**
+ * Strict variant of the host-qualified resolver for callers that treat a null runtime as local:
+ * rival HUBs projecting the same host report `ambiguous` instead of a transport-less route.
+ */
+export function resolveStrictWorktreeOperationRouteResultForHost(
+  state: WorktreeOperationRouteState,
+  worktreeId: string,
+  executionHostId: ExecutionHostId
+): WorktreeOperationRouteResolution {
+  const host = parseExecutionHostId(executionHostId)
+  if (!host) {
+    return { kind: 'missing' }
+  }
+  if (host.kind === 'ssh') {
+    const hubOwners = collectHubOwnerEnvironmentIds(state, worktreeId, host.id)
+    if (hubOwners.hasAmbiguousOwner || hubOwners.environmentIds.size > 1) {
+      return { kind: 'ambiguous' }
+    }
+  }
+  return { kind: 'resolved', route: resolveSelectedHostRoute(state, worktreeId, host) }
+}
+
+function collectHubOwnerEnvironmentIds(
+  state: WorktreeOperationRouteState,
+  worktreeId: string,
+  executionHostId: ExecutionHostId
+): { environmentIds: Set<string>; hasAmbiguousOwner: boolean } {
+  const environmentIds = new Set<string>()
+  let hasAmbiguousOwner = false
+  for (const owner of ownerRecordsOnHost(state, worktreeId, executionHostId)) {
+    const resolution = resolveExactWorktreeRoute(state, owner)
+    hasAmbiguousOwner ||= resolution.kind === 'ambiguous'
+    if (resolution.kind === 'resolved' && resolution.route.runtimeEnvironmentId) {
+      environmentIds.add(resolution.route.runtimeEnvironmentId)
+    }
+  }
+  return { environmentIds, hasAmbiguousOwner }
+}
+
+/**
  * An authoritative host selection already names the target, so only the transport has to be
  * recovered — and only for `ssh:`, which a paired HUB can proxy. Rival HUBs projecting the same
  * host stay unresolved rather than guessing one.
@@ -139,21 +189,18 @@ function resolveSelectedHostRoute(
   }
   // Why: only an `ssh:` selection can hide a paired HUB owner, so local stays an O(1) hot path.
   if (selectedHost.kind !== 'ssh') {
-    return { executionHostId: selectedHost.id, runtimeEnvironmentId: null }
+    return onPairedWebClientHost(state, {
+      executionHostId: selectedHost.id,
+      runtimeEnvironmentId: null
+    })
   }
-  const environmentIds = new Set<string>()
-  for (const owner of ownerRecordsOnHost(state, worktreeId, selectedHost.id)) {
-    const resolution = resolveExactWorktreeRoute(state, owner)
-    if (resolution.kind === 'resolved' && resolution.route.runtimeEnvironmentId) {
-      environmentIds.add(resolution.route.runtimeEnvironmentId)
-    }
-  }
+  const { environmentIds } = collectHubOwnerEnvironmentIds(state, worktreeId, selectedHost.id)
   const environmentId = environmentIds.values().next().value
-  return {
+  return onPairedWebClientHost(state, {
     executionHostId: selectedHost.id,
     // Why: rival HUBs projecting the same host cannot be disambiguated by the host selection alone.
     runtimeEnvironmentId: environmentIds.size === 1 && environmentId ? environmentId : null
-  }
+  })
 }
 
 /**
@@ -201,6 +248,16 @@ export function resolveWorktreeOperationRoute(
  * defaulting an unplaceable id to `local` would aim the operation at the wrong machine.
  */
 export function resolveWorktreeOperationRouteResult(
+  state: WorktreeOperationRouteState,
+  worktreeId: string
+): WorktreeOperationRouteResolution {
+  const resolution = resolveOwnerRouteResult(state, worktreeId)
+  return resolution.kind === 'resolved'
+    ? { kind: 'resolved', route: onPairedWebClientHost(state, resolution.route) }
+    : resolution
+}
+
+function resolveOwnerRouteResult(
   state: WorktreeOperationRouteState,
   worktreeId: string
 ): WorktreeOperationRouteResolution {
@@ -316,18 +373,4 @@ function resolveFolderWorkspaceOperationRoute(
       runtimeEnvironmentId: parsedHost?.kind === 'runtime' ? parsedHost.environmentId : null
     }
   }
-}
-
-/**
- * Projects the route's runtime environment onto settings so a routed operation runs against the
- * owner's environment rather than whichever one the UI has active; settings can still be absent
- * during early hydration, hence the synthesized fallback.
- */
-export function settingsForWorktreeOperationRoute(
-  settings: AppState['settings'],
-  route: WorktreeOperationRoute
-): AppState['settings'] {
-  return settings
-    ? { ...settings, activeRuntimeEnvironmentId: route.runtimeEnvironmentId }
-    : ({ activeRuntimeEnvironmentId: route.runtimeEnvironmentId } as AppState['settings'])
 }

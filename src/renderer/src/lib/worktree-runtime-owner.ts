@@ -1,9 +1,12 @@
-import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  parseExecutionHostId,
+  toRuntimeExecutionHostId,
+  UNRESOLVED_OWNER_HOST_ID
+} from '../../../shared/execution-host'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { getRepoIdFromWorktreeId } from '@/store/slices/worktree-helpers'
 import {
   findIndexedRepoOwner as findRepoRecord,
@@ -13,6 +16,7 @@ import {
   resolveIndexedWorktreeOwner
 } from './worktree-runtime-owner-index'
 import { getSingleFocusedRuntimeEnvironmentId } from './single-runtime-legacy-owner'
+import { getPairedWebClientEnvironmentId } from './paired-web-client-host'
 import {
   findFolderWorkspaceOwner,
   getExecutionHostIdForFolderWorkspace,
@@ -20,6 +24,7 @@ import {
   getRuntimeEnvironmentIdForFolderWorkspace
 } from './folder-workspace-runtime-owner'
 import {
+  getFloatingWorkspaceOperationRoute,
   resolveActiveWorkspaceRoute,
   resolveExplicitWorktreeOperationRouteResult,
   resolveWorktreeOperationRouteResult
@@ -63,8 +68,9 @@ export function getRuntimeEnvironmentIdForWorktree(
   if (!worktreeId) {
     return null
   }
-  if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
-    return null
+  const floatingRoute = getFloatingWorkspaceOperationRoute(worktreeId)
+  if (floatingRoute) {
+    return floatingRoute.runtimeEnvironmentId
   }
   const activeRoute = resolveActiveWorkspaceRoute(state, worktreeId)
   if (activeRoute) {
@@ -83,9 +89,12 @@ export function getRuntimeEnvironmentIdForWorktree(
     const projectedRuntimeOwner = getProjectedRuntimeOwnerEnvironmentId(owner)
     const parsedHost = parseExecutionHostId(owner.hostId)
     const hasDetectedOwner = hasIndexedDetectedWorktree(state.detectedWorktreesByRepo, worktreeId)
+    // Why: a row on a web client that names no server is still reached through its only one.
+    const onlyHost = getPairedWebClientEnvironmentId(state)
     if (!hasDetectedOwner && (projectedRuntimeOwner || parsedHost)) {
       return (
-        projectedRuntimeOwner || (parsedHost?.kind === 'runtime' ? parsedHost.environmentId : null)
+        projectedRuntimeOwner ||
+        (parsedHost?.kind === 'runtime' ? parsedHost.environmentId : onlyHost)
       )
     }
     if (!hasDetectedOwner) {
@@ -99,7 +108,7 @@ export function getRuntimeEnvironmentIdForWorktree(
       ) {
         const repoHost = parseExecutionHostId(getRepoExecutionHostId(repoResolution.owner))
         if (repoHost) {
-          return repoHost.kind === 'runtime' ? repoHost.environmentId : null
+          return repoHost.kind === 'runtime' ? repoHost.environmentId : onlyHost
         }
       }
     }
@@ -181,8 +190,9 @@ export function getKnownExecutionHostIdForWorktree(
   if (!worktreeId) {
     return 'local'
   }
-  if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
-    return 'local'
+  const floatingRoute = getFloatingWorkspaceOperationRoute(worktreeId)
+  if (floatingRoute) {
+    return floatingRoute.executionHostId
   }
   const activeHostId = getActiveWorkspaceExecutionHostId(state, worktreeId)
   if (activeHostId) {
@@ -202,11 +212,13 @@ export function getKnownExecutionHostIdForWorktree(
     if (resolution.kind === 'resolved') {
       return (
         resolution.route.executionHostId ??
-        `runtime:${encodeURIComponent(resolution.route.runtimeEnvironmentId ?? 'unresolved-owner')}`
+        (resolution.route.runtimeEnvironmentId
+          ? toRuntimeExecutionHostId(resolution.route.runtimeEnvironmentId)
+          : UNRESOLVED_OWNER_HOST_ID)
       )
     }
     // Why: conflicting detected publications must never enable paired-client-local PTY behavior.
-    return 'runtime:unresolved-owner'
+    return UNRESOLVED_OWNER_HOST_ID
   }
   const worktree = findWorktreeRecord(state.worktreesByRepo, worktreeId)
   const worktreeHostId = getExecutionHostIdFromWorktreeHost(worktree?.hostId)
@@ -235,14 +247,4 @@ export function getExecutionHostIdForWorktree(
     getKnownExecutionHostIdForWorktree(state, worktreeId) ??
     getFocusedRuntimeOrLocalExecutionHostId(state)
   )
-}
-
-export function getSettingsForWorktreeRuntimeOwner(
-  state: WorktreeRuntimeOwnerState,
-  worktreeId: string | null | undefined
-): Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> {
-  return {
-    ...state.settings,
-    activeRuntimeEnvironmentId: getRuntimeEnvironmentIdForWorktree(state, worktreeId)
-  }
 }

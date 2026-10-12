@@ -112,10 +112,8 @@ export async function main(
     // lookup so users do not get misleading "Orca is not running" failures for
     // simple command typos or unsupported flags.
     validateCommandAndFlags(COMMAND_SPECS, parsed)
-    refuseConflictingSessionCallerFlags(
-      findCommandSpec(COMMAND_SPECS, parsed.commandPath),
-      parsed.flags
-    )
+    const commandSpec = findCommandSpec(COMMAND_SPECS, parsed.commandPath)
+    refuseConflictingSessionCallerFlags(commandSpec, parsed.flags)
     const RuntimeClientClass = await loadRuntimeClientClass()
     const ignoreRemoteSelection = shouldIgnoreRemoteSelection(parsed.commandPath)
     const pairingCode = ignoreRemoteSelection ? null : parsed.flags.get('pairing-code')

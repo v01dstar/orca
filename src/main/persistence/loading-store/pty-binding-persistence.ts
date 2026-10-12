@@ -16,6 +16,27 @@ import { evaluatePtyBindingFastLane } from './pty-binding-fast-lane'
 import { ptyBindingIsRefused } from './pty-binding-refusals'
 import { startPtyBindingSpan, type PtyBindingOrigin, type PtyBindingSpan } from './pty-binding-span'
 import { applyPtyBinding } from './pty-binding-session-update'
+import type { TerminalPanePlacement } from '../../../shared/terminal-pane-placement'
+import { terminalPanePlacementAgreement } from '../terminal-topology/terminal-pane-placement-agreement'
+import type {
+  TerminalLeafMoveRequest,
+  TerminalLeafMoveResult
+} from '../../../shared/terminal-leaf-move'
+import {
+  admitPane,
+  moveLeaf,
+  withdrawPane,
+  type TerminalTopologyCommitContext
+} from '../terminal-topology/terminal-topology-commit'
+import type {
+  TerminalPaneAdmission,
+  TerminalPaneAdmissionOutcome
+} from '../terminal-topology/terminal-pane-admission'
+import type {
+  CommandOf,
+  LayoutRefusalCode
+} from '../../../shared/workspace-layout/workspace-layout-command-types'
+import { findTerminalBindingConflict } from '../../../shared/workspace-layout/terminal-owner-invariants'
 
 type PtyBindingPersistenceOperationsRuntime = Pick<
   StoreRuntimeState,
@@ -38,8 +59,6 @@ export type PersistPtyBindingArgs = {
   startupCwd?: string
   expectedBinding?: { ptyId: string; incarnationId?: string }
   expectedSourceBinding?: PtyBindingSourceExpectation
-  /** Set by host-initiated creates, which have no renderer session writer behind them. */
-  hostAdmittedMembership?: boolean
   /**
    * Defaults true, which is what `pty:spawn` needs — it can beat the debounced layout writer
    * and must be able to mint the surface it is binding. A reattach is the opposite: the pane
@@ -51,6 +70,8 @@ export type PersistPtyBindingArgs = {
   mayReviveRetiredSurface?: boolean
   /** Span metadata only; see `PtyBindingOrigin`. The write path never reads it. */
   origin?: PtyBindingOrigin
+  /** Where a new leaf goes. Report-only for now: the span records whether it names today's tab. */
+  placement?: TerminalPanePlacement
 }
 
 const ptyBindingPersistenceOperationsContext = Symbol('PtyBindingPersistenceOperations')
@@ -149,10 +170,24 @@ export class PtyBindingPersistenceOperations {
         const session = sessions.getWorkspaceSession(resolvedHostId)
         const partitions = sessions
           .getWorkspaceSessionHostIds()
-          .map((hostId) => sessions.getWorkspaceSession(hostId))
+          .map((hostId) => ({ hostId, session: sessions.getWorkspaceSession(hostId) }))
         if (ptyBindingIsRefused(args, session, bindingWorktreeId, paneKey, partitions)) {
           outcome = 'refused'
           return { value: false, persist: false }
+        }
+        // Report-only: a malformed session must not fail the binding it is reporting on.
+        try {
+          span.setPlacement(
+            terminalPanePlacementAgreement(
+              args.placement,
+              session,
+              bindingWorktreeId,
+              args.tabId,
+              args.leafId
+            )
+          )
+        } catch {
+          span.setPlacement('check_threw')
         }
         const verdict = evaluatePtyBindingFastLane(
           args,
@@ -165,6 +200,16 @@ export class PtyBindingPersistenceOperations {
           outcome = 'fast_lane'
           return { value: true, persist: false }
         }
+        // Report-only: the binding is written even when it breaks an invariant, or the check throws.
+        // After the fast lane, so a no-op rebind skips the scan.
+        try {
+          const conflict = findTerminalBindingConflict(args, resolvedHostId, partitions)
+          if (conflict) {
+            span.setOwnerConflict(conflict.reason)
+          }
+        } catch {
+          span.setOwnerConflict('check_threw')
+        }
         return {
           value: true,
           rollback: writePtyBinding(this, args, session, resolvedHostId, bindingWorktreeId, paneKey)
@@ -176,6 +221,47 @@ export class PtyBindingPersistenceOperations {
       span?.finish('threw', error)
       throw error
     }
+  }
+
+  /**
+   * Detach-to-new-tab, committed before the renderer mounts the target tab (STA-9259). It lives on
+   * the binding domain only for its runtime and partition access; the commit module owns the write.
+   */
+  moveTerminalLeafToNewTab(request: TerminalLeafMoveRequest): Promise<TerminalLeafMoveResult> {
+    return this[ptyBindingPersistenceOperationsContext].runtime.runDurableMutation(
+      moveLeaf(request, topologyCommitContext(this))
+    )
+  }
+
+  /** Writes a runtime-started pane before its terminal starts; the commit module owns the write. */
+  admitTerminalPane(
+    admission: TerminalPaneAdmission,
+    hostId?: string | null
+  ): Promise<TerminalPaneAdmissionOutcome> {
+    return this[ptyBindingPersistenceOperationsContext].runtime.runDurableMutation(
+      admitPane(resolveHostId(hostId), admission, topologyCommitContext(this))
+    )
+  }
+
+  withdrawTerminalPane(
+    pane: CommandOf<'closePane'>,
+    hostId?: string | null
+  ): Promise<LayoutRefusalCode | null> {
+    return this[ptyBindingPersistenceOperationsContext].runtime.runDurableMutation(
+      withdrawPane(resolveHostId(hostId), pane, topologyCommitContext(this))
+    )
+  }
+}
+
+function topologyCommitContext(
+  owner: PtyBindingPersistenceOperations
+): TerminalTopologyCommitContext {
+  const { runtime, sessions } = owner[ptyBindingPersistenceOperationsContext]
+  return {
+    state: runtime.state,
+    hostIds: () => sessions.getWorkspaceSessionHostIds(),
+    getSession: (hostId) => sessions.getWorkspaceSession(hostId),
+    markDirty: (domain) => runtime.dirtyProfileStateDomains?.add(domain)
   }
 }
 
@@ -245,13 +331,4 @@ function writePtyBinding(
     restore()
     throw error
   }
-}
-
-export function installPtyBindingPersistenceOperationsContext(
-  target: PtyBindingPersistenceOperations,
-  source: PtyBindingPersistenceOperations
-): void {
-  Object.defineProperty(target, ptyBindingPersistenceOperationsContext, {
-    value: source[ptyBindingPersistenceOperationsContext]
-  })
 }

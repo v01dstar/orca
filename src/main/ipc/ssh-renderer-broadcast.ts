@@ -1,20 +1,16 @@
 import type { BrowserWindow } from 'electron'
 import type { SshPortForwardManager } from '../ssh/ssh-port-forward'
-import type {
-  DetectedPort,
-  EnrichedDetectedPort,
-  SshConnectionStatus,
-  SshConnectionState
-} from '../../shared/ssh-types'
+import type { DetectedPort, EnrichedDetectedPort, SshConnectionState } from '../../shared/ssh-types'
 import { isRuntimeOwnedSshTargetId } from '../../shared/execution-host'
 import {
   enrichSshDetectedPorts,
   enrichSshForwardEntries,
   getWorktreeIdsForConnection
 } from '../ports/ssh-advertised-url-enrichment'
+import { isRuntimeOwnedSshTarget } from '../ssh/ssh-connection-store'
 import { getSshProviderAuthority } from '../ssh/ssh-provider-authority'
-import { getSshPlainSshMode } from '../ssh/ssh-plain-ssh-mode'
-import { activeSessions } from './ssh-active-relay-sessions'
+import { clearSshHostServerStatus, getSshHostServerStatus } from '../ssh/ssh-host-server-status'
+import { getSshTargetRegistryStore } from '../ssh/ssh-target-registry'
 import {
   connectionManager,
   currentRuntime,
@@ -23,15 +19,14 @@ import {
   portForwardManager
 } from './ssh-ipc-context'
 
-export const relayStateOverrides = new Map<string, SshConnectionState>()
-
 export function broadcastSshState(
   getMainWindow: () => BrowserWindow | null,
   targetId: string,
   state: SshConnectionState
 ): void {
-  // Why: runtime-owned (ephemeral-VM) targets are hidden from the renderer, so broadcasting their state only triggers wasted listTargets() lookups.
-  if (isRuntimeOwnedSshTargetId(targetId)) {
+  const target = getSshTargetRegistryStore()?.getTarget(targetId)
+  // Why: owned targets are hidden from clients; broadcasting them leaks internal transport state into persisted reconnect hints.
+  if (isRuntimeOwnedSshTargetId(targetId) || (target && isRuntimeOwnedSshTarget(target))) {
     currentRuntime?.invalidateSshWorktreeScanCache?.(targetId)
     return
   }
@@ -45,33 +40,15 @@ export function broadcastSshState(
 }
 
 function withSshRemotePlatform(targetId: string, state: SshConnectionState): SshConnectionState {
-  const remotePlatform = activeSessions.get(targetId)?.getHostPlatform()?.os
   const authority = getSshProviderAuthority(targetId)
-  const plainSsh = state.status === 'connected' ? getSshPlainSshMode(targetId) : undefined
+  const managedServer = state.managedServer ?? getSshHostServerStatus(targetId)
   return {
     ...state,
     targetId,
     providerEpoch: authority.providerEpoch,
     connectionGeneration: authority.connectionGeneration,
-    ...(remotePlatform ? { remotePlatform } : {}),
-    ...(plainSsh ? { plainSsh } : {})
+    ...(managedServer ? { managedServer } : {})
   }
-}
-
-export function publishRelayOverride(
-  getMainWindow: () => BrowserWindow | null,
-  targetId: string,
-  status: SshConnectionStatus,
-  error: string | null,
-  reconnectAttempt: number
-): void {
-  const state = withSshRemotePlatform(targetId, { targetId, status, error, reconnectAttempt })
-  relayStateOverrides.set(targetId, state)
-  broadcastSshState(getMainWindow, targetId, state)
-}
-
-export function clearRelayStateOverride(targetId: string): void {
-  relayStateOverrides.delete(targetId)
 }
 
 export function connectionSupportsFolderDownload(targetId: string): boolean {
@@ -79,8 +56,21 @@ export function connectionSupportsFolderDownload(targetId: string): boolean {
   return connectionManager?.getConnection(targetId)?.usesSystemSshTransport?.() !== true
 }
 
+/**
+ * Forgets a host's managed-server decision once its server is unlinked, and republishes the
+ * connection without it. The republish is also what drops the host's cached worktree scans, so
+ * listings stop naming the removed server without waiting for a reconnect.
+ */
+export function clearPublishedManagedServer(targetId: string): void {
+  clearSshHostServerStatus(targetId)
+  const state = connectionManager?.getState(targetId)
+  if (state) {
+    broadcastSshState(getCurrentMainWindow, targetId, state)
+  }
+}
+
 export function getPublicSshState(targetId: string): SshConnectionState | undefined {
-  const state = relayStateOverrides.get(targetId) ?? connectionManager!.getState(targetId)
+  const state = connectionManager!.getState(targetId)
   return state ? withSshRemotePlatform(targetId, state) : undefined
 }
 

@@ -367,13 +367,13 @@ describe('ClaudeSubagentRoster', () => {
   })
 
   describe('groups that no later event can reach', () => {
-    it('loses contact with a group evicted past the bound', () => {
+    it('retains live groups past the settled-history bound', () => {
       const { roster, rolesIn, setGroupKey } = harness('turn-0')
       for (let index = 0; index < 33; index += 1) {
         setGroupKey(`turn-${index}`)
         roster.observeSystemFrame(started({ task_id: `task-${index}`, description: 'Audit' }))
       }
-      expect(rolesIn('turn-0')).toEqual([expect.objectContaining({ state: 'unverifiable' })])
+      expect(rolesIn('turn-0')).toEqual([expect.objectContaining({ state: 'working' })])
       expect(rolesIn('turn-32')).toEqual([expect.objectContaining({ state: 'working' })])
     })
 
@@ -589,17 +589,20 @@ describe('ClaudeSubagentRoster — invocation fences', () => {
     expect(rolesIn(TURN_1)[0].state).toBe('completed')
   })
 
-  it('bounds invocation history and refuses to reopen beyond the retained budget', () => {
+  it('keeps reopening a child resumed many times, and never revives a run it has forgotten', () => {
     const { roster, roles } = harness()
     for (let i = 0; i < 20; i++) {
       roster.observeSystemFrame(started({ task_id: 'task-1', tool_use_id: `tool-${i}` }))
-      if (i >= 16) {
-        expect(roles()[0].state).toBe('unverifiable')
-      }
+      expect(roles()[0].state).toBe('working')
       roster.observeToolResult(`tool-${i}`, false)
+      expect(roles()[0].state).toBe('completed')
     }
     roster.observeSystemFrame(started({ task_id: 'task-1', tool_use_id: 'tool-0' }))
-    expect(roles()[0].state).toBe('unverifiable')
+    roster.observeSystemFrame(started({ task_id: 'task-1', tool_use_id: 'tool-19' }))
+    expect(roles()[0].state).toBe('completed')
+    expect(roster.linkage.settledLinkageFor('tool-19')).toMatchObject({
+      linkage: { agentId: 'task-1', attempt: 20 }
+    })
   })
 })
 

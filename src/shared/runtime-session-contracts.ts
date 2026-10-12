@@ -15,6 +15,7 @@ import type {
   RuntimeMobileSessionTerminalClientTab
 } from './runtime-mobile-session-tab-contracts'
 import type { CliStatusCaller } from './orchestration-caller-status'
+import type { RuntimeHostDescriptor } from './runtime-host-descriptor'
 
 export type * from './runtime-mobile-session-tab-contracts'
 
@@ -79,7 +80,8 @@ export type RuntimeStatus = {
   worktreeCreateIdempotency?: {
     dedupeTtlMs: number
   }
-  /** True only when this Windows host can prove process creation times for PID ownership. */
+  /** True only when this Windows host can read process creation times. TEMPORARY: read only by
+   *  older clients, which keep re-probing WSL until it is true; remove after their window. */
   windowsProcessStartTimeAvailable?: boolean
   /**
    * Optional for mixed-version peers. Absence means the host predates structured
@@ -92,6 +94,8 @@ export type RuntimeStatus = {
   hostPlatform?: NodeJS.Platform
   /** Optional display name reported by the answering runtime. */
   machineName?: string
+  /** Absent from older hosts and from hosts whose profile could not persist an installation id. */
+  hostDescriptor?: RuntimeHostDescriptor
   terminalWindowsShell?: string | null
   deviceScope?: DeviceScope
   floatingWorkspaceEnabled?: boolean
@@ -216,11 +220,14 @@ export type RuntimeSessionTabCloseReason = 'user' | 'pty-exit' | 'cleanup'
  * The publication epoch a runtime answers with for a worktree it has published nothing for yet —
  * the state every worktree is in for a moment after the host process restarts.
  *
- * Paired with `snapshotVersion: 0` it marks a synthesized placeholder, not a host answer: the
+ * Bare or with a paired client's navigation suffix, it marks a synthesized placeholder, not a host answer: the
  * runtime is saying "ask me later", not "those tabs are gone". Clients must not read absence from
  * such a frame as evidence a tab was closed.
  */
 export const UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH = 'none'
+
+/** Suffix a host appends to the epoch when projecting a snapshot for one paired client's navigation. */
+export const CLIENT_NAVIGATION_PUBLICATION_EPOCH_SUFFIX = ':client-navigation'
 
 export type RuntimeMobileSessionTabsSnapshot = {
   worktree: string

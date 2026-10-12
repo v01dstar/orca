@@ -1,4 +1,9 @@
 import type {
+  AutomaticWorkResumeOutcome,
+  AutomaticWorkStatus,
+  SpawnIntent
+} from '../../shared/host-spawn-admission'
+import type {
   AgentSessionClaimedSpawnResult,
   AgentSessionExecutionClaim,
   AgentSessionSurfaceBinding
@@ -8,11 +13,17 @@ import type { TuiAgent } from '../../shared/tui-agent'
 import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import type { PtyBindingSourceExpectation } from '../persistence'
+import type { TerminalPanePlacement } from '../../shared/terminal-pane-placement'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { PtyProviderBufferSnapshot, PtyProcessInfo, PtySpawnResult } from '../providers/types'
 import type { PtyProcessInspection } from '../providers/pty-process-inspection'
 import type { WriteSettlement } from '../../shared/pty-write-settlement'
 import type { TerminalInputKind } from '../../shared/terminal-input-kind'
+
+export type PtyInventoryRefreshOptions = {
+  includeForegroundProcessEvidence?: boolean
+  refreshForegroundAgents?: boolean
+}
 
 export type RuntimePtyController = {
   claimStablePaneCreate?(args: {
@@ -66,6 +77,7 @@ export type RuntimePtyController = {
     initiallyHidden?: boolean
     persistHostSessionBinding?: boolean
     expectedSourceBinding?: PtyBindingSourceExpectation
+    placement?: TerminalPanePlacement
     terminalKittyKeyboardProtocol?: boolean
     terminalColorQueryReplies?: { foreground?: string; background?: string }
     agentSessionEnsure?: {
@@ -73,7 +85,9 @@ export type RuntimePtyController = {
       surface: AgentSessionSurfaceBinding
     }
     agentSessionCreateOperationId?: string
+    spawnIntent?: SpawnIntent
     signal?: AbortSignal
+    refuseSleptWorktree?: boolean
     onPtySpawnCommitted?: () => void
     adoptedStablePane?: {
       result: PtySpawnResult
@@ -94,6 +108,9 @@ export type RuntimePtyController = {
     stablePaneOwner?: { handle: string; tabId: string; leafId: string }
     agentSessionEnsure?: AgentSessionClaimedSpawnResult
   }>
+  /** The local terminal owner's automatic-restore state; null when it has no fork gate. */
+  getAutomaticWorkStatus?(): Promise<AutomaticWorkStatus | null>
+  resumeAutomaticWork?(): Promise<AutomaticWorkResumeOutcome>
   write(ptyId: string, data: string, inputKind: TerminalInputKind): boolean
   /** Three-valued settlement; local providers settle synchronously. */
   writeWithSettlement?(
@@ -111,9 +128,6 @@ export type RuntimePtyController = {
     ptyId: string,
     opts?: { keepHistory?: boolean; deadlineMs?: number }
   ): Promise<boolean>
-  /** Durably records a kill order for an explicit close's unconfirmed stop, replayed when its SSH
-   *  host reconnects. True only when an order was written; local PTYs have no later host to ask. */
-  recordUnconfirmedStop?(ptyId: string): boolean
   getCwd?(ptyId: string): Promise<string | null>
   getForegroundProcess(ptyId: string): Promise<string | null>
   inspectProcess?(
@@ -128,8 +142,9 @@ export type RuntimePtyController = {
   resize?(ptyId: string, cols: number, rows: number): boolean
   // Why: exact-id mobile polls should not enumerate every local and SSH PTY.
   hasPty?(ptyId: string): boolean | null
+  /** Omitting the host lists every registered host. */
   listProcesses?(
-    connectionId?: string | null,
+    hostId?: ExecutionHostId,
     opts?: { deadlineMs?: number; includeForegroundProcessEvidence?: boolean }
   ): Promise<PtyProcessInfo[]>
   listProcessesWithHostScope?(opts?: {
@@ -139,7 +154,7 @@ export type RuntimePtyController = {
     processes: PtyProcessInfo[]
     hostIds: ExecutionHostId[]
   }>
-  supportsForegroundProcessEvidence?(connectionId?: string | null): Promise<boolean>
+  supportsForegroundProcessEvidence?(hostId?: ExecutionHostId): Promise<boolean>
   serializeBuffer?(
     ptyId: string,
     opts?: { scrollbackRows?: number }

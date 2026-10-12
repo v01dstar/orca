@@ -6,6 +6,7 @@ import {
 } from '../../../../shared/terminal-stream-protocol'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import { REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS } from './remote-runtime-pty-recovery-state'
+import { stubRuntimeEnvironmentBridge } from '../../runtime/runtime-environment-bridge-fixture'
 
 // Why: the recovery cutoff no longer tears down the retry registry entry or the accepted-snapshot
 // listener, so those two module-global collections are the only places a latched pane can accumulate.
@@ -171,9 +172,7 @@ describe('remote runtime pty latched-pane retention', () => {
         return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
       }
     )
-    vi.stubGlobal('window', {
-      api: { runtimeEnvironments: { call: runtimeCall, subscribe: runtimeSubscribe } }
-    })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall, subscribe: runtimeSubscribe })
   })
 
   it('returns listener and retry-registry counts to baseline across destroy cycles', async () => {

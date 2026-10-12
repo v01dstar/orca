@@ -1,6 +1,7 @@
 // A Stop that ends the child after its interrupt failed: its row reports on the run it stopped, so
-// one whose child end took back the send it found, with no turn running, leaves none. Its message
-// is back in the composer, and a row would sit under the turn before as if that turn were stopped.
+// one whose child end took back the send it found, with no turn running, leaves none. A client
+// draws that send where it was sent with its own row, and a second row would sit under the turn
+// before on an older client, as if that turn were stopped.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -12,16 +13,18 @@ import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { performCancel, type AgentSessionTurnContext } from './structured-agent-session-turns'
+import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-1',
   workspaceId: 'workspace-1',
   hostId: 'host-1',
   agent: 'codex',
-  providerHandle: { kind: 'codex', threadId: 'thread-1' }
+  providerHandle: codexProviderHandle('thread-1')
 }
 
 let root: string | null = null
@@ -75,6 +78,8 @@ async function stopEndingTheChild(options: {
     sessionId: 'session-1',
     journal,
     fence: 1,
+    agents: NO_STRUCTURED_AGENTS,
+    agent: 'codex',
     adapter: {
       acquire: vi.fn(),
       dispatch: vi.fn(),

@@ -8,6 +8,7 @@ import type {
   AgentJournalCursor,
   AgentJournalItemBody,
   AgentJournalItemIdentity,
+  AgentJournalRenderItem,
   AgentJournalSnapshot,
   AgentJournalSubmission,
   AgentJournalThreadGoal,
@@ -40,11 +41,7 @@ import {
   resolveJournalItemId,
   type JournalReducerState
 } from './journal-reducer'
-import {
-  journalDispatchRowBuilder,
-  journalSubmissionRowBuilder,
-  journalTombstoneRowBuilder
-} from './journal-row-builders'
+import { journalTombstoneRowBuilder } from './journal-row-builders'
 import type {
   AgentSessionJournalOptions,
   JournalAppendResult,
@@ -57,19 +54,27 @@ import type {
   JournalTombstoneInput,
   ResolveDispatchInput
 } from './journal-store-contracts'
-import { queuedMessageConsumeHook, type JournalQueuedMessages } from './journal-queued-messages'
+import type { JournalQueuedMessages } from './journal-queued-messages'
 import {
   journalQueueResumeRowBuilder,
+  journalQueueReopenRowBuilder,
   journalStopEventRowBuilder
 } from './journal-stop-and-resume-rows'
 import type { AgentJournalEpochReason, JournalStopEvent } from './journal-row-schema'
-import type { JournalOperationReceipt, JournalRowWriter } from './journal-row-writer'
+import type {
+  JournalOperationReceipt,
+  JournalRowTransactionHook,
+  JournalRowWriter
+} from './journal-row-writer'
+import type { JournalSubmissionWriter } from './journal-submission-writer'
 import type { JournalEpochController } from './journal-epoch-controller'
 import { JournalWriteQueue } from './journal-write-queue'
 import { createJournalStoreCollaborators } from './journal-store-collaborators'
-import type { JournalItemAppender, JournalResolvedItem } from './journal-item-appender'
+import type { JournalItemAppender } from './journal-item-appender'
 import type { JournalLifecycleBatchAppender } from './journal-lifecycle-batch-appender'
+import type { JournalStepWriter } from './journal-step-writer'
 import type { JournalStopMarks } from './journal-stop-marks'
+import { JournalContextController } from './journal-context-controller'
 
 export { AgentSessionJournalError } from './journal-write-guards'
 
@@ -81,16 +86,20 @@ export class AgentSessionJournal {
 
   private state: JournalReducerState
   private openedThrough: AgentJournalCursor = { epoch: '', sequence: 0 }
+  private reopenUnmarked: AgentJournalCursor | null = null
   private onCommitted: (() => void) | null = null
   private readonly queue: JournalWriteQueue
   private readonly rowWriter: JournalRowWriter
   private readonly epochController: JournalEpochController
   private readonly itemAppender: JournalItemAppender
   private readonly lifecycleBatchAppender: JournalLifecycleBatchAppender
+  private readonly submissionWriter: JournalSubmissionWriter
+  private readonly stepWriter: JournalStepWriter
   private readonly restore: () => Promise<void>
   /** Draft rows queued while the agent works; never reducer input or owed work. */
   readonly queuedMessages: JournalQueuedMessages
   readonly stopMarks: JournalStopMarks
+  readonly context: JournalContextController
 
   constructor(options: AgentSessionJournalOptions) {
     this.identity = options.identity
@@ -102,12 +111,9 @@ export class AgentSessionJournal {
     this.queue = new JournalWriteQueue(options.identity.sessionId)
     const collaborators = createJournalStoreCollaborators({
       identity: this.identity,
-      legacyDirectory: this.database.legacyDirectoryFor(this.identity),
       now: this.now,
       mintEpoch: this.mintEpoch,
       serialize: (run) => this.queue.serialize(run),
-      deferPerSessionImport: options.deferPerSessionImport === true,
-      owe: (work) => this.queue.owe(work),
       database: () => this.database,
       state: () => this.state,
       // A newer Orca's database: nothing it holds opens, and every write is refused.
@@ -117,21 +123,30 @@ export class AgentSessionJournal {
         this.adoptLoadedJournal(loaded)
         this.onCommitted?.()
       },
-      commit: (row) => {
-        applyJournalRow(this.state, row)
+      commit: (rows, savedAt) => {
+        for (const row of rows) {
+          applyJournalRow(this.state, row, savedAt)
+        }
         this.onCommitted?.()
       },
       notifyCommitted: () => this.onCommitted?.(),
       journal: () => this,
-      enqueue: (build) => this.rowWriter.enqueue(build)
+      enqueue: (build, receipt) => this.rowWriter.enqueue(build, undefined, receipt)
     })
     this.rowWriter = collaborators.rowWriter
     this.epochController = collaborators.epochController
     this.itemAppender = collaborators.itemAppender
     this.lifecycleBatchAppender = collaborators.lifecycleBatchAppender
+    this.submissionWriter = collaborators.submissionWriter
+    this.stepWriter = collaborators.stepWriter
     this.queuedMessages = collaborators.queuedMessages
     this.stopMarks = collaborators.stopMarks
     this.restore = collaborators.restore
+    this.context = new JournalContextController({
+      state: () => this.state,
+      writer: this.rowWriter,
+      cards: this.queuedMessages
+    })
   }
 
   get epoch(): string {
@@ -152,6 +167,12 @@ export class AgentSessionJournal {
     )
   }
 
+  /** Where the reopen's pause begins when this handle could not write its mark: where the mark
+   *  would have gone. Null once a mark is written. Per handle, so the next open marks again. */
+  reopenFloor(): AgentJournalCursor | null {
+    return this.reopenUnmarked
+  }
+
   async open(): Promise<void> {
     await this.restore()
     this.openedThrough = this.cursor()
@@ -160,6 +181,7 @@ export class AgentSessionJournal {
   /** Refuses every later write and resolves once the admitted ones have landed. Holds no
    *  connection, so there is nothing to release and nothing that can fail. */
   close(): Promise<void> {
+    this.queuedMessages.editLeases.dispose()
     this.queue.markClosed()
     return this.queue.drain()
   }
@@ -168,20 +190,6 @@ export class AgentSessionJournal {
    *  without its writer saying so. One listener: a later call replaces it. It must not throw. */
   observeCommits(listener: () => void): void {
     this.onCommitted = listener
-  }
-
-  /**
-   * Resolves once the chat's rows are in the host's database. A restore's open serves a chat still
-   * in its per-chat file from a read-only fold of it; the copy runs before the chat's first write.
-   * A reader that needs rows (forward pages, catch-up) and every mutation's open await it here, so
-   * each reads the fold after every earlier write.
-   */
-  whenImported(): Promise<void> {
-    return this.queue.serialize(() => undefined)
-  }
-
-  get importPending(): boolean {
-    return this.queue.owing
   }
 
   cursor = (): AgentJournalCursor => ({
@@ -203,6 +211,9 @@ export class AgentSessionJournal {
   /** One reduced item's body by its journal key, for a writer revising a row it can name. */
   itemBody = (itemId: string): AgentJournalItemBody | null =>
     this.state.items.get(itemId)?.body ?? null
+
+  /** One reduced item with its attribution, for a writer that needs the turn a row joined. */
+  item = (itemId: string): AgentJournalRenderItem | null => this.state.items.get(itemId) ?? null
 
   /** Visits reduced items with the producer that wrote each, for a producer re-deriving what an
    *  earlier run of this session left. */
@@ -239,6 +250,10 @@ export class AgentSessionJournal {
   /** Fence of the writer that created the item, while it is in the timeline. */
   itemFence = (itemId: string): number | undefined => this.state.itemFences.get(itemId)
 
+  /** Latest saved output at this fence, excluding client actions and recovery bookkeeping. */
+  lastProviderActivityAt = (fence: number): number | undefined =>
+    this.state.providerActivityAt.get(fence)
+
   submissions = (): AgentJournalSubmission[] => [...this.state.submissions.values()]
 
   submission = (clientMessageId: string) => this.state.submissions.get(clientMessageId)
@@ -254,7 +269,7 @@ export class AgentSessionJournal {
   canonicalItemId = (itemId: string): string => resolveJournalItemId(this.state, itemId)
 
   /** Reads the fold with every write issued before this call committed, and none issued after: at
-   *  once unless writes still wait behind an owed import or a running write. */
+   *  once unless a write is running or writes wait in line. */
   readInOrder<T>(read: () => T): Promise<T> {
     return this.queue.readInOrder(read)
   }
@@ -270,27 +285,22 @@ export class AgentSessionJournal {
   appendItem(
     identity: AgentJournalItemIdentity,
     body: AgentJournalItemBody,
-    options: JournalItemAppendOptions
+    options: JournalItemAppendOptions,
+    receipt?: JournalOperationReceipt
   ): Promise<JournalAppendResult> {
-    return this.itemAppender.append(identity, body, options)
+    return this.itemAppender.append(identity, body, options, receipt)
   }
 
   /** An upsert whose row is chosen from the fold at its own turn in the queue; null writes nothing. */
-  appendResolvedItem(
-    resolve: () => JournalResolvedItem | null,
-    options: JournalItemAppendOptions
-  ): Promise<JournalAppendResult | null> {
-    return this.itemAppender.appendResolved(resolve, options)
-  }
+  appendResolvedItem: JournalItemAppender['appendResolved'] = (resolve, options) =>
+    this.itemAppender.appendResolved(resolve, options)
 
   appendTombstone(
     identity: AgentJournalItemIdentity,
-    options: JournalTombstoneInput
+    { fence }: JournalTombstoneInput
   ): Promise<AgentJournalCursor> {
     const itemId = agentJournalItemKey(identity)
-    return this.rowWriter.append(
-      journalTombstoneRowBuilder(() => this.state, itemId, options.fence)
-    )
+    return this.rowWriter.append(journalTombstoneRowBuilder(() => this.state, itemId, fence))
   }
 
   /** A Stop that took effect, timed by its row (`JournalStopEvent`). */
@@ -299,43 +309,50 @@ export class AgentSessionJournal {
   }
 
   /** A person's Resume of the queue. */
-  appendQueueResume(fence: number): Promise<AgentJournalCursor> {
-    return this.rowWriter.append(journalQueueResumeRowBuilder(() => this.state, fence))
+  appendQueueResume(fence: number, receipt?: JournalOperationReceipt): Promise<AgentJournalCursor> {
+    const build = journalQueueResumeRowBuilder(() => this.state, fence)
+    return this.rowWriter.append(build, undefined, receipt)
+  }
+
+  /** This open found waiting cards an earlier handle wrote (`queued-message-pause.ts`). */
+  appendQueueReopen(fence: number, since?: number): Promise<AgentJournalCursor> {
+    return this.rowWriter.append(journalQueueReopenRowBuilder(() => this.state, fence, since))
+  }
+
+  /** Marks the reopen when a card waits or is mid-hand-off (it may come back to waiting), from
+   *  `since` when the chat stopped before now; a failed write leaves where the mark would have gone
+   *  as the pause's start (`reopenFloor`), and throws. */
+  async markQueueReopen(fence: number, since?: number): Promise<void> {
+    if (this.queuedMessages.awaitReopenMark()) {
+      const sequence = since ?? this.state.lastSequence + 1
+      this.reopenUnmarked = { epoch: this.state.epoch, sequence }
+      await this.appendQueueReopen(fence, since)
+      this.reopenUnmarked = null
+    }
   }
 
   appendLifecycleBatch(input: JournalLifecycleBatchInput): Promise<AgentJournalCursor> {
     return this.lifecycleBatchAppender.append(input)
   }
 
-  /**
-   * Write-ahead submission row. It is durable before the caller dispatches
-   * anything, and it doubles as the optimistic user bubble so an accepted echo
-   * reconciles into an existing slot instead of appending a second copy.
-   */
+  /** Several writes as one turn in the queue; see `JournalStepWriter`. */
+  appendSteps: JournalStepWriter['append'] = (steps) => this.stepWriter.append(steps)
+
+  /** The write-ahead submission row (`JournalSubmissionWriter.append`). */
   appendSubmission(
     input: JournalSubmissionInput,
-    /** Present: this submission is a queued draft's conversion, and the draft's
-     *  state transition commits in the SAME transaction — exactly-once consume. */
     consume?: JournalSubmissionConsume,
-    /** The send's ledger answer, committed with this row. */
     receipt?: JournalOperationReceipt
   ): Promise<AgentJournalCursor> {
-    return this.rowWriter.append(
-      journalSubmissionRowBuilder(() => this.state, this.identity.providerHandle, input, consume),
-      consume && queuedMessageConsumeHook(this.queuedMessages, input.clientMessageId, consume),
-      receipt
-    )
+    return this.submissionWriter.append(input, consume, receipt)
   }
 
-  /**
-   * Record a dispatch transition, including a proven retry returning to pending.
-   *
-   * Accepting REQUIRES the provider identity rather than a free-form id: the
-   * adopted key is what the provider's echo will upsert into, so a mismatched
-   * string here would silently give the user a second copy of their own message.
-   */
-  resolveDispatch(input: ResolveDispatchInput): Promise<AgentJournalCursor> {
-    return this.rowWriter.append(journalDispatchRowBuilder(() => this.state, input))
+  /** A dispatch transition (`JournalSubmissionWriter.resolveDispatch`). */
+  resolveDispatch(
+    input: ResolveDispatchInput,
+    hook?: JournalRowTransactionHook
+  ): Promise<AgentJournalCursor> {
+    return this.submissionWriter.resolveDispatch(input, hook)
   }
 
   /** Retire unanswered sends after their execution owner ended, without assuming delivery. */
@@ -343,7 +360,7 @@ export class AgentSessionJournal {
     return markJournalPendingSubmissionsUnknown(this, fence, reason)
   }
 
-  /** Reject unanswered sends after an owner that never proved its start ended: none was written. */
+  /** Reject sends a child that ended in its start was handed and never echoed: none ran. */
   async rejectPendingSubmissions(
     fence: number,
     rejection: AgentJournalDispatchRejection

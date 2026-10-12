@@ -20,9 +20,11 @@ type FloatingWorkspaceMarkdownStore = Pick<AppState, 'activeGroupIdByWorktree' |
 
 export async function createFloatingWorkspaceTerminalTab(
   store: FloatingWorkspaceTerminalStore,
-  shellOverride?: string
+  shellOverride?: string,
+  /** A split group's own "+"; omitted, the tab lands in the focused group. */
+  groupId?: string
 ): Promise<TerminalTab | null> {
-  const targetGroupId = store.activeGroupIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID]
+  const targetGroupId = groupId ?? store.activeGroupIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID]
 
   // Why: the floating workspace is a local scratchpad; a focused remote runtime
   // must not own its SSH/tmux terminals or prune them via session snapshots.
@@ -66,7 +68,7 @@ export async function createFloatingWorkspaceMarkdownTab(
     floatingMarkdownDirectory,
     FLOATING_TERMINAL_WORKTREE_ID,
     getConnectionId(FLOATING_TERMINAL_WORKTREE_ID) ?? undefined,
-    { activeRuntimeEnvironmentId: null }
+    { kind: 'local' }
   )
   if (!fileInfo) {
     return

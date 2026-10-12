@@ -2,6 +2,8 @@ import { ipcMain } from 'electron'
 import type {
   SshConfigHostListArgs,
   SshRepoReadoption,
+  SshTarget,
+  SshTargetAddResult,
   SshTargetCreateInput,
   SshTargetUpdateInput
 } from '../../shared/ssh-types'
@@ -9,10 +11,20 @@ import {
   listUserSshConfigHostSummaries,
   resolveUserSshConfigHost
 } from '../ssh/ssh-config-host-picker'
+import { getManagedOrcadFenceEnvironmentId } from '../../shared/managed-orcad-ssh-owner'
+import { closeOrcadManagedTunnel } from '../ssh/orcad-managed-tunnel'
 import { rotateSshProviderAuthority } from '../ssh/ssh-provider-authority'
-import { getSshTargetRegistryStore } from '../ssh/ssh-target-registry'
-import { getCurrentMainWindow } from './ssh-ipc-context'
+import { getSshTargetRegistryStore, setSshTargetMutations } from '../ssh/ssh-target-registry'
+import {
+  allowsDirectSshRelay,
+  isManagedOrcadSshTarget,
+  isRuntimeOwnedSshTarget
+} from '../ssh/ssh-connection-store'
+import { connectionManager, getCurrentMainWindow } from './ssh-ipc-context'
+import { runTargetLifecycle } from './ssh-target-lifecycle-queue'
+import { fingerprintRuntimeSshTarget } from '../ssh/runtime-ssh-access'
 import { removeRegisteredSshTarget } from './ssh-session-teardown'
+import { notifyReposChanged } from './repos/repos-changed-notification'
 
 // Why: add/import can re-adopt workspaces orphaned on a removed target id (see ssh-target-readoption); the renderer must refresh its repo list to surface them.
 function takeRepoReadoptions(): SshRepoReadoption[] {
@@ -27,26 +39,108 @@ function takeRepoReadoptions(): SshRepoReadoption[] {
   )) {
     rotateSshProviderAuthority(targetId)
   }
-  const win = getCurrentMainWindow()
-  if (win && !win.isDestroyed()) {
-    win.webContents.send('repos:changed')
-  }
+  // Why: paired clients refetch repos only on this event, and they may have made the change.
+  notifyReposChanged(getCurrentMainWindow())
   return repoReadoptions
 }
 
-// Why: generations and the runtime ladder cache are main-owned; a renderer must not forge them.
+// Why: generations, provisioning, the server fence and the runtime ladder cache are main-owned;
+// a renderer must not forge them.
 function omitRendererSshTargetGeneration<
-  T extends { generation?: unknown; remoteRuntimeResolution?: unknown }
->(value: T): Omit<T, 'generation' | 'remoteRuntimeResolution'> {
+  T extends {
+    generation?: unknown
+    orcadProvisioning?: unknown
+    orcadFence?: unknown
+    managedServerUnavailable?: unknown
+    managedServerMoveOffered?: unknown
+    managedServerUpdateFailure?: unknown
+    remoteRuntimeResolution?: unknown
+  }
+>(
+  value: T
+): Omit<
+  T,
+  | 'generation'
+  | 'orcadProvisioning'
+  | 'orcadFence'
+  | 'managedServerUnavailable'
+  | 'managedServerMoveOffered'
+  | 'managedServerUpdateFailure'
+  | 'remoteRuntimeResolution'
+> {
   const {
     generation: _generation,
+    orcadProvisioning: _orcadProvisioning,
+    orcadFence: _orcadFence,
+    managedServerUnavailable: _managedServerUnavailable,
+    managedServerMoveOffered: _managedServerMoveOffered,
+    managedServerUpdateFailure: _managedServerUpdateFailure,
     remoteRuntimeResolution: _remoteRuntimeResolution,
     ...rest
   } = value
   return rest
 }
 
+function assertNotRuntimeOwned(targetId: string, action: string): void {
+  const target = getSshTargetRegistryStore()!.getTarget(targetId)
+  if (target && isRuntimeOwnedSshTarget(target)) {
+    throw new Error(`Managed runtime SSH targets cannot be ${action} from SSH settings.`)
+  }
+}
+
+/** Removing a managed host would strand its server; Stop proves the exit, Forget skips a dead host. */
+export function assertNotManagedServerHost(targetId: string): void {
+  const target = getSshTargetRegistryStore()!.getTarget(targetId)
+  if (target && isManagedOrcadSshTarget(target)) {
+    throw new Error(
+      'This host runs a managed Orca server. Use Stop… under Settings › Managed servers to stop the server and remove it first, or Forget… there if the host is gone.'
+    )
+  }
+}
+
+function addSshTarget(input: SshTargetCreateInput): SshTargetAddResult {
+  const target = getSshTargetRegistryStore()!.addTarget(omitRendererSshTargetGeneration(input))
+  // Why: re-adding a removed host can re-adopt orphaned workspaces; refresh the renderer's repo list so they move back onto the live host.
+  const repoReadoptions = takeRepoReadoptions()
+  return { target, repoReadoptions }
+}
+
+function updateSshTarget(id: string, updates: SshTargetUpdateInput): SshTarget | null {
+  assertNotRuntimeOwned(id, 'edited')
+  const before = getSshTargetRegistryStore()!.getTarget(id)
+  // The fence and generation are stripped, so a managed host keeps its server binding.
+  const updated = getSshTargetRegistryStore()!.updateTarget(
+    id,
+    omitRendererSshTargetGeneration(updates)
+  )
+  const environmentId = getManagedOrcadFenceEnvironmentId(updated ?? undefined)
+  if (environmentId && updated) {
+    // Why: the tunnel and the SSH transport under it were built from the old fields, so both go
+    // and the next use dials the edited target. Only a host reached through its managed server:
+    // one an older build changed runs on the relay directly, whose session owns the transport.
+    const redial =
+      !allowsDirectSshRelay(updated) &&
+      (!before || fingerprintRuntimeSshTarget(before) !== fingerprintRuntimeSshTarget(updated))
+    void runTargetLifecycle(id, async () => {
+      await closeOrcadManagedTunnel(environmentId)
+      if (redial) {
+        await connectionManager?.disconnect(id)
+      }
+    }).catch(() => undefined)
+  }
+  return updated
+}
+
+async function removeSshTarget(id: string): Promise<void> {
+  assertNotRuntimeOwned(id, 'removed')
+  assertNotManagedServerHost(id)
+  await removeRegisteredSshTarget(id)
+}
+
 export function registerSshTargetCrudHandlers(): void {
+  // Why: paired clients manage this host's targets over RPC with the same rules as SSH settings.
+  setSshTargetMutations({ add: addSshTarget, update: updateSshTarget, remove: removeSshTarget })
+
   ipcMain.handle('ssh:listTargets', () => {
     return getSshTargetRegistryStore()!.listTargets()
   })
@@ -55,28 +149,17 @@ export function registerSshTargetCrudHandlers(): void {
     return getSshTargetRegistryStore()!.listRemovedTargetLabels()
   })
 
-  ipcMain.handle('ssh:addTarget', (_event, args: { target: SshTargetCreateInput }) => {
-    const target = getSshTargetRegistryStore()!.addTarget(
-      omitRendererSshTargetGeneration(args.target)
-    )
-    // Why: re-adding a removed host can re-adopt orphaned workspaces; refresh the renderer's repo list so they move back onto the live host.
-    const repoReadoptions = takeRepoReadoptions()
-    return { target, repoReadoptions }
-  })
+  ipcMain.handle('ssh:addTarget', (_event, args: { target: SshTargetCreateInput }) =>
+    addSshTarget(args.target)
+  )
 
   ipcMain.handle(
     'ssh:updateTarget',
-    (_event, args: { id: string; updates: SshTargetUpdateInput }) => {
-      return getSshTargetRegistryStore()!.updateTarget(
-        args.id,
-        omitRendererSshTargetGeneration(args.updates)
-      )
-    }
+    (_event, args: { id: string; updates: SshTargetUpdateInput }) =>
+      updateSshTarget(args.id, args.updates)
   )
 
-  ipcMain.handle('ssh:removeTarget', async (_event, args: { id: string }) => {
-    await removeRegisteredSshTarget(args.id)
-  })
+  ipcMain.handle('ssh:removeTarget', (_event, args: { id: string }) => removeSshTarget(args.id))
 
   ipcMain.handle('ssh:importConfig', (_event, args?: { reAdopt?: boolean }) => {
     const targets = getSshTargetRegistryStore()!.importFromSshConfig(args)

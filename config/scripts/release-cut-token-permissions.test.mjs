@@ -11,10 +11,11 @@ const EXPECTED_MATRIX = {
   '.github/workflows/e2e.yml#build': { contents: 'read' },
   '.github/workflows/e2e.yml#changed-e2e': { contents: 'read' },
   '.github/workflows/e2e.yml#e2e': { contents: 'read' },
+  '.github/workflows/e2e.yml#orcad-serve-mode-switch': { contents: 'read' },
+  '.github/workflows/e2e.yml#orcad-serve-mode-switch-windows': { contents: 'read' },
+  '.github/workflows/e2e.yml#orcad-ssh-docker': { contents: 'read' },
   '.github/workflows/e2e.yml#prepare-native-cache': { contents: 'read' },
   '.github/workflows/e2e.yml#ssh-browser-network-route': { contents: 'read' },
-  '.github/workflows/e2e.yml#ssh-localhost': { contents: 'read' },
-  '.github/workflows/e2e.yml#ssh-docker-watcher-isolation': { contents: 'read' },
   '.github/workflows/homebrew-bump.yml#bump-cask': { contents: 'read' },
   '.github/workflows/node-server-tests.yml#changes': { contents: 'read' },
   '.github/workflows/node-server-tests.yml#desktop_template': { contents: 'read' },
@@ -61,10 +62,11 @@ const EXPECTED_MATRIX = {
   },
   [`${RELEASE_WORKFLOW}#post-release-e2e`]: { actions: 'write' },
   [`${RELEASE_WORKFLOW}#publish-release`]: { contents: 'write' },
+  [`${RELEASE_WORKFLOW}#release-javascript`]: { contents: 'read' },
+  [`${RELEASE_WORKFLOW}#release-javascript -> .github/workflows/release-javascript.yml#bundle`]: {
+    contents: 'read'
+  },
   [`${RELEASE_WORKFLOW}#release-preflight`]: { contents: 'read' },
-  [`${RELEASE_WORKFLOW}#relay-windows-process-tree`]: { contents: 'read' },
-  [`${RELEASE_WORKFLOW}#relay-windows-process-tree -> .github/workflows/relay-windows-process-tree.yml#build`]:
-    { contents: 'read' },
   [`${RELEASE_WORKFLOW}#skill-sharing-linux-floor-release-gate`]: { contents: 'read' },
   [`${RELEASE_WORKFLOW}#skill-sharing-release-gate`]: { contents: 'read' },
   [`${RELEASE_WORKFLOW}#terminal-rendering-golden`]: { contents: 'read' },

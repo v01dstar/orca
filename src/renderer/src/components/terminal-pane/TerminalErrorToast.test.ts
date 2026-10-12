@@ -242,6 +242,15 @@ describe('isExplainedTerminalError', () => {
     ).toBe(true)
   })
 
+  it('explains a pane whose saved session another host connection owns, without an issue link', () => {
+    const raw = "Error invoking remote method 'pty:spawn': Error: terminal_pane_owner_host_mismatch"
+    expect(isExplainedTerminalError(raw)).toBe(true)
+    const humanized = humanizeTerminalError(raw)
+    expect(humanized).toContain('belongs to another host connection')
+    expect(humanized).toContain('Open a new terminal')
+    expect(humanized).not.toContain('terminal_pane_owner_host_mismatch')
+  })
+
   it('keeps the issue link for errors Orca cannot explain', () => {
     expect(isExplainedTerminalError('Paste failed.')).toBe(false)
     expect(isExplainedTerminalError('node-pty: open_slave failed: EMFILE')).toBe(false)
@@ -342,6 +351,20 @@ describe('TerminalErrorToast environment footer', () => {
     )
 
     await waitFor(() => expect(environmentMocks.resolveFooter).not.toHaveBeenCalled())
+  })
+
+  it('omits client details for a remote pane whose session cannot be reattached', async () => {
+    const error = "Error invoking remote method 'pty:attach': Error: Session not found: pty-7"
+    const remote = render(
+      React.createElement(TerminalErrorToast, { error, paneOnClient: false, onDismiss: vi.fn() })
+    )
+    expect(remote.container.textContent).toContain("couldn't reattach")
+    await waitFor(() => expect(environmentMocks.resolveFooter).not.toHaveBeenCalled())
+    expect(remote.container.textContent).not.toContain('OS:')
+    cleanup()
+
+    const local = render(React.createElement(TerminalErrorToast, { error, onDismiss: vi.fn() }))
+    await waitFor(() => expect(local.container.textContent).toContain('OS: darwin'))
   })
 
   it('shows the issue request once for a host error that already asks for one', () => {

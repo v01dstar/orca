@@ -1,5 +1,5 @@
-// A write has landed in the fold when its call returns, except during an owed import, when it lands
-// in queue order. A write issued from inside a running write joins the line behind it, never nested.
+// A write has landed in the fold when its call returns. A write issued from inside a running write
+// joins the line behind it, never nested.
 // A read in the queue always settles: behind a write that failed, and refused once closed.
 
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -16,17 +16,17 @@ import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase
 } from './journal-host-database-test-support'
-import { openJournalOwingImport } from './journal-owed-import-test-support'
 import type { AgentSessionJournal } from './journal-store'
 import { openAgentSessionJournal } from './journal-store-factory'
 import { JournalWriteQueue } from './journal-write-queue'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const IDENTITY = {
   sessionId: 'session-1',
   workspaceId: 'workspace-1',
   hostId: 'host-1',
   agent: 'codex',
-  providerHandle: { kind: 'codex', threadId: 'thread-1' }
+  providerHandle: codexProviderHandle('thread-1')
 } as const
 
 const reply = (text: string): AgentJournalMessageItem => ({
@@ -66,15 +66,6 @@ async function idleJournal(): Promise<AgentSessionJournal> {
   return journal
 }
 
-async function journalOwingImport(): Promise<{ journal: AgentSessionJournal; history: number }> {
-  const { journal, history } = await openJournalOwingImport({
-    stateDirectory: root,
-    identity: IDENTITY
-  })
-  opened.push(journal)
-  return { journal, history: history.length }
-}
-
 function sequenceOf(journal: AgentSessionJournal, ordinal: number): number | undefined {
   const key = agentJournalItemKey(item(ordinal))
   let found: number | undefined
@@ -100,25 +91,6 @@ describe('when a journal write lands', () => {
     await expect(Promise.all([first, second])).resolves.toHaveLength(2)
   })
 
-  it('lands in queue order, behind the history it copies, while an import is owed', async () => {
-    const { journal, history } = await journalOwingImport()
-
-    const first = journal.appendItem(item(1), reply('one'), OPTIONS)
-    const second = journal.appendItem(item(2), reply('two'), OPTIONS)
-    // Neither has landed: both wait behind the copy the first write pays.
-    expect(journal.itemBody(agentJournalItemKey(item(1)))).toBeNull()
-    expect(journal.importPending).toBe(true)
-
-    await second
-    await first
-    expect(journal.importPending).toBe(false)
-    expect(sequenceOf(journal, 1)).toBe(history + 1)
-    expect(sequenceOf(journal, 2)).toBe(history + 2)
-    // The copy is paid: the next write lands at its call again.
-    journal.appendItem(item(3), reply('three'), OPTIONS).catch(() => undefined)
-    expect(sequenceOf(journal, 3)).toBe(history + 3)
-  })
-
   it('joins the line behind a write it was issued from inside, never nested in it', async () => {
     const journal = await idleJournal()
     let inner: Promise<unknown> | null = null
@@ -138,10 +110,35 @@ describe('when a journal write lands', () => {
     await inner
     expect(sequenceOf(journal, 2)).toBe(sequenceOf(journal, 1)! + 1)
   })
+
+  it('writes no row for a resolve that finds nothing, and keeps the line moving', async () => {
+    const journal = await idleJournal()
+    const before = journal.cursor().sequence
+
+    await expect(journal.appendResolvedItem(() => null, OPTIONS)).resolves.toBeNull()
+    expect(journal.cursor().sequence).toBe(before)
+    await journal.appendItem(item(1), reply('after'), OPTIONS)
+    expect(journal.itemBody(agentJournalItemKey(item(1)))).toEqual(reply('after'))
+  })
+
+  it('preserves other resolver errors even when their message matches the no-row error', async () => {
+    const journal = await idleJournal()
+    const before = journal.cursor().sequence
+    const error = new Error('journal_item_resolved_to_nothing')
+
+    await expect(
+      journal.appendResolvedItem(() => {
+        throw error
+      }, OPTIONS)
+    ).rejects.toBe(error)
+    expect(journal.cursor().sequence).toBe(before)
+    await journal.appendItem(item(1), reply('after'), OPTIONS)
+    expect(journal.itemBody(agentJournalItemKey(item(1)))).toEqual(reply('after'))
+  })
 })
 
 describe('the journal write queue', () => {
-  it('runs a write before it returns when nothing is owed or running', () => {
+  it('runs a write before it returns when nothing is running', () => {
     const queue = new JournalWriteQueue('session-1')
     const ran: string[] = []
     void queue.serialize(() => {
@@ -186,27 +183,6 @@ describe('the journal write queue', () => {
     await Promise.all([outer, nested, after])
     expect(ran).toEqual(['outer', 'nested', 'after'])
   })
-
-  it('runs every write admitted while work is owed after it, in order', async () => {
-    const queue = new JournalWriteQueue('session-1')
-    const ran: string[] = []
-    const owed = Promise.withResolvers<void>()
-    queue.owe(async () => {
-      await owed.promise
-      ran.push('owed')
-    })
-    const first = queue.serialize(() => {
-      ran.push('first')
-    })
-    const read = queue.readInOrder(() => ran.push('read'))
-    owed.resolve()
-    const second = queue.serialize(() => {
-      ran.push('second')
-    })
-    await Promise.all([first, read, second])
-    expect(ran).toEqual(['owed', 'first', 'read', 'second'])
-    expect(queue.owing).toBe(false)
-  })
 })
 
 describe('a read in the journal write queue', () => {
@@ -217,29 +193,17 @@ describe('a read in the journal write queue', () => {
     expect(ran).toEqual(['read'])
   })
 
-  it('does not pay owed work, and runs behind a write that pays it', async () => {
-    const queue = new JournalWriteQueue('session-1')
-    const ran: string[] = []
-    queue.owe(async () => {
-      ran.push('owed')
-    })
-    void queue.readInOrder(() => ran.push('read before'))
-    expect(ran).toEqual(['read before'])
-    const write = queue.serialize(() => {
-      ran.push('write')
-    })
-    const read = queue.readInOrder(() => ran.push('read after'))
-    await Promise.all([write, read])
-    expect(ran).toEqual(['read before', 'owed', 'write', 'read after'])
-  })
-
   it('runs behind a write that failed', async () => {
     const queue = new JournalWriteQueue('session-1')
-    queue.owe(async () => undefined)
-    const failed = queue.serialize(() => {
-      throw new Error('disk I/O error')
+    let failed: Promise<unknown> = Promise.resolve()
+    let read: Promise<string> = Promise.resolve('')
+    // Issued from inside a running write, so both join the line.
+    await queue.serialize(() => {
+      failed = queue.serialize(() => {
+        throw new Error('disk I/O error')
+      })
+      read = queue.readInOrder(() => 'read')
     })
-    const read = queue.readInOrder(() => 'read')
     await expect(failed).rejects.toThrow('disk I/O error')
     await expect(read).resolves.toBe('read')
   })

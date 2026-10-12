@@ -503,7 +503,10 @@ describe('a helper whose spawn was never seen', () => {
       turn('turn/started', HELPER, HELPER_TURN),
       helperShell('item/started')
     )
-    expect(run.strip()).toEqual([expect.objectContaining({ kind: 'command' })])
+    expect(run.strip()).toEqual([])
+    expect(run.commands()).toEqual([
+      expect.objectContaining({ membership: 'live', residency: 'foreground' })
+    ])
 
     run.send(sendInput)
     // No spawn named it, so it reads as any unnamed subagent does.
@@ -551,7 +554,7 @@ describe('a helper whose spawn was never seen', () => {
     ])
   })
 
-  it("puts a helper's run in the turn that sent it work, even after that turn ended", async () => {
+  it("reopens a helper's one entry when a later turn sends it work, even after that turn ended", async () => {
     const run = await session()
     run.send(
       turn('turn/started', THREAD_ID, PARENT_TURN),
@@ -564,8 +567,9 @@ describe('a helper whose spawn was never seen', () => {
       turn('turn/completed', THREAD_ID, 'parent-turn-2'),
       turn('turn/started', HELPER, 'helper-turn-2')
     )
+    // One entry per helper: a second row naming it would show it without its own section.
     const groups = new Set(run.rosterRows().map((row) => row.groupId))
-    expect(groups.size).toBe(2)
+    expect(groups.size).toBe(1)
     expect(run.rosterRows().at(-1)?.agents).toEqual([
       expect.objectContaining({ id: HELPER, state: 'working' })
     ])

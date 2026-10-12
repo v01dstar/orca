@@ -2,7 +2,6 @@ import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
 import type { ClientChannel } from 'ssh2'
 import { execCommand, waitForSentinel } from './ssh-relay-deploy-helpers'
-import { shouldProbeBuildToolchainAfterNativeDepsFailure } from './ssh-relay-build-toolchain'
 import { RELAY_SENTINEL } from './relay-protocol'
 import {
   RelayVersionMismatchError,
@@ -400,30 +399,6 @@ describe('execCommand', () => {
     expect(error.message.length).toBeLessThan(1024 * 1024 + 200)
   })
 
-  it('keeps the merged error message greppable by the build-toolchain probe', async () => {
-    const channel = createMockChannel()
-    const conn = {
-      exec: vi.fn().mockResolvedValue(channel)
-    }
-    const commandPromise = execCommand(conn as never, 'npm install 2>&1')
-
-    await Promise.resolve()
-    // Why: the OpenSSH banner alone never matches the probe, so the old
-    // `stderr || stdout` masking suppressed the actionable "install build
-    // tools" hint. The merged message keeps the node-gyp failure visible.
-    channel.stderr.emit('data', Buffer.from("Warning: Permanently added 'host' (ED25519)\n"))
-    channel.emit(
-      'data',
-      Buffer.from(
-        'npm error gyp ERR! configure error\nnpm error gyp ERR! stack Error: not found: make\n'
-      )
-    )
-    channel.emit('close', 1)
-
-    const error = await execCommandRejection(commandPromise)
-    expect(shouldProbeBuildToolchainAfterNativeDepsFailure(error.message)).toBe(true)
-  })
-
   it('cleans command channel listeners when a command times out', async () => {
     vi.useFakeTimers()
     try {
@@ -589,7 +564,10 @@ describe('execCommand', () => {
     await expect(commandPromise).resolves.toBe('MISSING\n')
     expect(captured).toEqual(['node: --bogus is not allowed in NODE_OPTIONS\n'])
     // onStderr must not leak into the SSH exec options.
-    expect(conn.exec).toHaveBeenCalledWith("(node -e 'x' || echo MISSING)", {})
+    expect(conn.exec).toHaveBeenCalledWith(
+      expect.stringContaining("\n(node -e 'x' || echo MISSING)\n"),
+      {}
+    )
   })
 
   it('uses custom command timeouts without forwarding them to SSH exec', async () => {

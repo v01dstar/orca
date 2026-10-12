@@ -15,8 +15,8 @@
  * is moved back.
  */
 import { randomInt } from 'node:crypto'
-import type { SshConnection } from './ssh-connection'
-import { execCommand } from './ssh-relay-deploy-helpers'
+import type { RemoteInstallTransport } from './remote-install-transport'
+import { execHostCommand } from './ssh-relay-host-exec'
 import { isUnconfirmedSshCommandTermination } from './ssh-relay-exec-command'
 import {
   isRelayNativeDepsCacheEntryName,
@@ -64,16 +64,6 @@ function staleTombstoneKey(name: string): string | null {
   return match[1]
 }
 
-function execHostCommand(
-  conn: SshConnection,
-  host: RemoteHostPlatform,
-  command: string
-): Promise<string> {
-  return execCommand(conn, command, {
-    wrapCommand: host.commandDialect !== 'powershell'
-  })
-}
-
 /**
  * Remove complete cache entries that nothing links to.
  *
@@ -83,7 +73,7 @@ function execHostCommand(
  * retry either.
  */
 export async function gcRelayNativeDepsCache(
-  conn: SshConnection,
+  conn: RemoteInstallTransport,
   host: RemoteHostPlatform,
   remoteHome: string,
   options?: { pinnedKeys?: readonly string[] }
@@ -136,7 +126,7 @@ function ownedTombstonePath(host: RemoteHostPlatform, base: string, key: string)
 }
 
 async function moveTree(
-  conn: SshConnection,
+  conn: RemoteInstallTransport,
   host: RemoteHostPlatform,
   source: string,
   destination: string
@@ -157,7 +147,7 @@ async function moveTree(
 }
 
 async function removeUnreferencedCacheEntry(
-  conn: SshConnection,
+  conn: RemoteInstallTransport,
   host: RemoteHostPlatform,
   remoteHome: string,
   base: string,
@@ -176,7 +166,7 @@ async function removeUnreferencedCacheEntry(
  * restore or delete it; the fresh name keeps every other pass off it for the stale window.
  */
 async function recoverAbandonedTombstone(
-  conn: SshConnection,
+  conn: RemoteInstallTransport,
   host: RemoteHostPlatform,
   remoteHome: string,
   base: string,
@@ -206,7 +196,7 @@ async function recoverAbandonedTombstone(
 }
 
 async function collectOwnedTombstone(
-  conn: SshConnection,
+  conn: RemoteInstallTransport,
   host: RemoteHostPlatform,
   remoteHome: string,
   key: string,
@@ -230,7 +220,7 @@ async function collectOwnedTombstone(
 }
 
 async function runOrDecline(
-  conn: SshConnection,
+  conn: RemoteInstallTransport,
   host: RemoteHostPlatform,
   command: string
 ): Promise<boolean> {
@@ -246,7 +236,7 @@ async function runOrDecline(
 }
 
 async function restoreCacheEntry(
-  conn: SshConnection,
+  conn: RemoteInstallTransport,
   host: RemoteHostPlatform,
   tombstone: string,
   entryDir: string
@@ -263,7 +253,7 @@ async function restoreCacheEntry(
 }
 
 async function scanCacheReferences(
-  conn: SshConnection,
+  conn: RemoteInstallTransport,
   host: RemoteHostPlatform,
   remoteHome: string
 ): Promise<ReferenceScan> {

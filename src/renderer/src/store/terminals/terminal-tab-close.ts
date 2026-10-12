@@ -17,6 +17,9 @@ import { commitTerminalSurfaceClose } from './terminal-surface-close-intent'
 import { omitUnverifiedPtyLossTabIds } from './terminal-unverified-pty-loss'
 import { removePaneKeysByTabPrefix } from '../slices/agent-status-pane-keyed-records'
 import { omitRecordKeys } from '../slices/worktrees/teardown/record-key-omission'
+import { deleteNativeChatComposerDraftsForTab } from '@/components/native-chat/native-chat-composer-draft-store'
+import { dropNativeChatPendingAttachmentsForTab } from '@/components/native-chat/native-chat-pending-attachment-cache'
+import { noteAgentLaunchPaneClosedByUser } from '@/lib/agent-launch-pane-closes'
 
 export function createTerminalTabCloseActions(
   set: TerminalStoreSet,
@@ -58,6 +61,14 @@ export function createTerminalTabCloseActions(
           const closing = before.find((t) => t.id === tabId)
           if (closing) {
             closingWorktreeId = wId
+            // The user closing a launch tab whose agent is still starting: that close wins.
+            if (
+              closeReason === 'user' &&
+              closing.agentLaunchPane &&
+              !closing.agentLaunchPane.outcome
+            ) {
+              noteAgentLaunchPaneClosedByUser(tabId, closing.agentLaunchPane.leafId)
+            }
             // Why: capture the first-matched tab's snapshot for the Cmd+Shift+T reopen stack (see capturedSnapshot below).
             if (!closedTab) {
               closedTab = closing
@@ -110,9 +121,6 @@ export function createTerminalTabCloseActions(
         const nextDeferredSshSessionIdsByTabId = omitByTabId(s.deferredSshSessionIdsByTabId)
         const nextPendingReconnectPtyIdByTabId = omitByTabId(s.pendingReconnectPtyIdByTabId)
         const nextRuntimePaneTitlesByTabId = omitByTabId(s.runtimePaneTitlesByTabId)
-        const nextDirectSshPaneRetryByTabId = omitByTabId(s.directSshPaneRetryByTabId)
-        const nextDirectSshLivePtyBindingByTabId = omitByTabId(s.directSshLivePtyBindingByTabId)
-        const nextDirectSshPaneRetryHistoryByTabId = omitByTabId(s.directSshPaneRetryHistoryByTabId)
         const nextUnverifiedPtyLossTabIds = omitUnverifiedPtyLossTabIds(s.unverifiedPtyLossTabIds, [
           tabId
         ])
@@ -192,9 +200,6 @@ export function createTerminalTabCloseActions(
           deferredSshSessionIdsByTabId: nextDeferredSshSessionIdsByTabId,
           pendingReconnectPtyIdByTabId: nextPendingReconnectPtyIdByTabId,
           runtimePaneTitlesByTabId: nextRuntimePaneTitlesByTabId,
-          directSshPaneRetryByTabId: nextDirectSshPaneRetryByTabId,
-          directSshLivePtyBindingByTabId: nextDirectSshLivePtyBindingByTabId,
-          directSshPaneRetryHistoryByTabId: nextDirectSshPaneRetryHistoryByTabId,
           ...(nextUnverifiedPtyLossTabIds !== s.unverifiedPtyLossTabIds
             ? { unverifiedPtyLossTabIds: nextUnverifiedPtyLossTabIds }
             : {}),
@@ -218,7 +223,6 @@ export function createTerminalTabCloseActions(
           expandedPaneByTabId: nextExpanded,
           canExpandPaneByTabId: nextCanExpand,
           terminalLayoutsByTabId: nextLayouts,
-          pendingDirectSshLayoutEditsByTabId: omitByTabId(s.pendingDirectSshLayoutEditsByTabId),
           localOnlyScrollbackByTabId: nextLocalOnlyScrollback,
           pendingStartupByTabId: nextPendingStartupByTabId,
           automaticAgentResumeClaimsByTabId: nextAutomaticAgentResumeClaimsByTabId,
@@ -249,6 +253,12 @@ export function createTerminalTabCloseActions(
       })
       if (intentReason && closingWorktreeId && opts?.remoteCloseOwnedByHost !== true) {
         commitTerminalSurfaceClose(closingWorktreeId, { kind: 'tab', tabId }, intentReason)
+      }
+      // Why only a user close: it is the explicit abandon. Other closes keep the drafts until their
+      // workspace is removed in Orca; drafts have no budget that retires them.
+      if (closeReason === 'user') {
+        deleteNativeChatComposerDraftsForTab(tabId)
+        dropNativeChatPendingAttachmentsForTab(tabId)
       }
       // Why shared with the paired snapshot apply: every path that removes a tab owes it the same sweep, and a second copy of the list is how one path silently misses a new entry.
       sweepRetiredTerminalTabState(get(), tabId, closingWorktreeId)

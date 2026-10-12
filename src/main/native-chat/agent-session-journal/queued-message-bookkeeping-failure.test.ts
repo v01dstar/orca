@@ -20,13 +20,14 @@ import {
   closeTestJournalHostDatabases,
   createTrackedJournalOpener
 } from './journal-host-database-test-support'
+import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-q',
   workspaceId: 'ws-1',
   hostId: 'host-1',
   agent: 'claude',
-  providerHandle: { kind: 'claude', sessionId: 'native-1', leafUuid: null }
+  providerHandle: claudeProviderHandle('native-1', null)
 }
 const REFUSAL = agentSessionFailureWords(
   agentSessionFailureFact('providerRejected', {
@@ -178,7 +179,12 @@ describe('draft bookkeeping inside a journal append', () => {
       try {
         await expect(
           journal.appendSubmission(
-            { clientMessageId: 'sub-draft-1', payloadFingerprint: 'fp', body: BODY, fence: 0 },
+            {
+              clientMessageId: 'sub-draft-1',
+              payloadFingerprint: 'fp-draft-1',
+              body: BODY,
+              fence: 0
+            },
             { messageId: 'draft-1', expect: 'waiting', settledByOp: null }
           )
         ).rejects.toThrow('SQLITE_FULL')

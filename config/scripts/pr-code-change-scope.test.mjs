@@ -159,17 +159,20 @@ describe('per-job path classification', () => {
     expectClassification(['src/main/codex/codex-index-heal-binary-contract.test.ts'], {
       codex_index_heal_contract: true
     })
-    for (const file of ['src/main/agent-trust-presets.ts', 'src/main/codex/config-toml-trust.ts']) {
-      expectClassification([file], {
-        codex_index_heal_contract: true,
-        package: true,
-        package_windows: true
-      })
-    }
-    // Keep the real-binary gate live when a transport or launch dependency changes.
+    // Keep the real-binary gate live when a trust, transport, launch or hook-approval dependency changes.
     for (const file of [
+      'src/main/agent-trust-presets.ts',
+      'src/main/codex/config-toml-trust.ts',
+      'src/main/codex/codex-hook-trust-derivation.ts',
+      'src/main/codex/codex-hook-local-install.ts',
+      'src/main/codex/codex-hook-orca-approvals.ts',
+      'src/main/codex/codex-hook-reconcile.ts',
+      'src/main/codex/config-toml-hook-trust-edit.ts',
+      'src/main/codex-cli/codex-read-only-app-server-args.ts',
       'src/main/codex/codex-app-server-capability-signal.ts',
-      'src/main/codex/codex-process-exit-deadline.ts',
+      'src/main/provider-process/provider-process-exit-deadline.ts',
+      'src/main/provider-process/provider-process-launch.ts',
+      'src/main/provider-process/provider-record-reader.ts',
       'src/main/codex/codex-session-backfill.ts',
       'src/main/codex/codex-session-index-heal-state.ts',
       'src/main/codex-cli/command.ts',
@@ -213,7 +216,7 @@ describe('per-job path classification', () => {
     for (const file of [
       'config/scripts/package-linux-formats.mjs',
       'config/scripts/package-linux-formats-appimage.mjs',
-      'config/scripts/script-child-process.mjs',
+      'config/scripts/process-failure-message.mjs',
       'config/scripts/space-sharing-copy.mjs',
       '.github/actions/prepare-linux-package-fixture/action.yml',
       'config/docker/cli-launch-contract/Dockerfile',
@@ -226,8 +229,7 @@ describe('per-job path classification', () => {
       'config/scripts/static-appimage-package-contract.cjs'
     ]) {
       expectClassification([file], {
-        package: true,
-        mobile_web_app: file === 'config/scripts/script-child-process.mjs'
+        package: true
       })
     }
   })
@@ -241,8 +243,7 @@ describe('per-job path classification', () => {
       'config/scripts/run-daemon-shutdown-descendants-docker.mjs'
     ]) {
       expectClassification([file], {
-        package: true,
-        mobile_web_app: file === 'config/scripts/script-child-process.mjs'
+        package: true
       })
     }
     for (const file of [
@@ -326,13 +327,13 @@ describe('per-job path classification', () => {
     for (const file of [
       'config/scripts/build-mobile-web-app-bundle.mjs',
       'config/scripts/run-mobile-web-app-checks.mjs',
-      'config/scripts/script-child-process.mjs',
-      'src/shared/child-process/run-process.ts',
+      'src/packages/process-host/src/run-process.ts',
       'config/scripts/mobile-web-app-route-manifest.mjs',
       'mobile/web-entry/index.tsx',
       'mobile/app/h/[hostId]/index.tsx',
       'mobile/src/transport/client-context.web.tsx',
       'mobile/modules/orca-mobile-web-shell/ios/MobileWebShellCsp.swift',
+      'src/shared/native-chat-visual-shell.ts',
       // The vendored Expo module the page resolves a .web.ts out of.
       'mobile/packages/expo-two-way-audio/src/ExpoTwoWayAudioModule.web.ts'
     ]) {
@@ -342,8 +343,7 @@ describe('per-job path classification', () => {
 
   it('runs it on a mobile-only diff, which should_run alone would skip', () => {
     const classified = classifyPrJobs(['mobile/app/h/[hostId]/tasks.tsx'])
-    expect(classified.should_run).toBe(false)
-    expect(classified.mobile_web_app).toBe(true)
+    expect([classified.should_run, classified.mobile_web_app]).toEqual([false, true])
   })
 
   it('needs no package.json prefix, because package.json already forces every job', () => {
@@ -363,6 +363,7 @@ describe('per-job path classification', () => {
       'src/shared/protocol-version.ts',
       'src/shared/terminal-stream-protocol.ts',
       'src/shared/agent-session-wire.ts',
+      'src/shared/agent-session-provider-handle.ts',
       'src/shared/agent-session-mutation-envelope.ts',
       'src/shared/agent-session-journal-item-key.ts',
       'src/shared/agent-session-journal-types.ts',
@@ -374,7 +375,7 @@ describe('per-job path classification', () => {
       'src/main/runtime/agent-session-record-store.ts',
       'src/main/runtime/rpc/dispatcher.ts',
       'src/main/runtime/rpc/methods/ai-vault.ts',
-      'src/main/runtime/rpc/methods/browser-tab-create-schema.ts',
+      'src/shared/rpc-contract/browser-tab-create-params.ts',
       'src/main/runtime/rpc/methods/session-tabs.ts',
       'src/main/runtime/rpc/methods/structured-agent-session.ts',
       'src/main/runtime/rpc/methods/structured-agent-session-gate.ts',
@@ -393,7 +394,9 @@ describe('per-job path classification', () => {
       expectClassification([file], {
         'cross-version-wire': true,
         package: true,
-        package_windows: true
+        package_windows: true,
+        // The session-tabs RPC publishes layout, so the layout oracle gates it too.
+        layout_oracle: file === 'src/main/runtime/rpc/methods/session-tabs.ts'
       })
     }
     expectClassification(
@@ -624,7 +627,7 @@ describe('PR Checks skip wiring', () => {
 
   it('gates each expensive job on its classifier and cache prerequisite', () => {
     for (const jobName of expensiveJobs.filter(
-      (jobName) => !['test', 'static_analysis', 'typecheck'].includes(jobName)
+      (jobName) => !['test', 'static_analysis', 'typecheck', 'orcad_browser'].includes(jobName)
     )) {
       expect(prWorkflow.jobs[jobName].needs, jobName).toEqual(['code_paths', 'preflight'])
       expect(prWorkflow.jobs[jobName].if, jobName).toContain(

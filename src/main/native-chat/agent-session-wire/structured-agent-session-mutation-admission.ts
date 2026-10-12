@@ -1,9 +1,8 @@
-// The one route every mutating agent-session call takes: recompute the
-// fingerprint, admit through the durable operation ledger, check the lease, then
-// run the plan. It lives outside the host so that no method can quietly grow its
-// own admission rules by sitting next to the call site.
+// The one route every mutating agent-session call takes: recompute the fingerprint,
+// accept a plan that declares a command receipt through it, otherwise admit
+// through the ledger and check the lease. Methods cannot grow their own admission rules.
 //
-// Admission is two-phase for a call that brings a `prepareSession`. The ledger's
+// Ledger-backed admission is two-phase when a call brings `prepareSession`. The ledger's
 // answer comes first and places nothing. An id it refuses is answered then, with
 // nothing opened; so is a recorded id that settled refused. Any other recorded id
 // is answered after the plan's own preparation for a replay (a send's only opens
@@ -23,14 +22,12 @@ import type {
   AgentSessionOperationRow
 } from '../../../shared/agent-session-operation-ledger'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import {
-  refuse,
-  type AgentSessionMutationEnvelope,
-  type AgentSessionMutationResult,
-  type AgentSessionWireRefusal
+import type {
+  AgentSessionMutationEnvelope,
+  AgentSessionMutationResult,
+  AgentSessionWireRefusal
 } from '../../../shared/agent-session-wire'
 import { isAgentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
-import { AGENT_SESSION_UNATTACHED_REFUSAL_CODE } from '../../../shared/structured-agent-session-read-refusal'
 import type {
   AgentSessionMutationOperationAdmission,
   AgentSessionMutationOperationDecision
@@ -49,22 +46,19 @@ import {
   resolveAgentSessionReplayOutcome
 } from './structured-agent-session-replay-outcome'
 import type { AgentSessionTurnContext } from './structured-agent-session-turns'
+import { mutationTurnContext } from './structured-agent-session-mutation-turn-context'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
+import type { StructuredAgentRegistry } from './structured-agent-registry'
+import { admitCommandReceiptMutation } from './structured-agent-session-command-admission'
 
-// The code is shared with the client so a read that refuses this way can be told apart from a
-// transcript that failed to load; the two must never drift apart.
-export const AGENT_SESSION_NOT_ATTACHED: AgentSessionWireRefusal = refuse(
-  AGENT_SESSION_UNATTACHED_REFUSAL_CODE,
-  { reason: 'sessionNotAttached' },
-  'This host holds no attached session by that id.'
-)
-
-export function refuseAgentSessionMutation(refusal: AgentSessionWireRefusal): {
-  ok: false
-  refusal: AgentSessionWireRefusal
-} {
-  return { ok: false, refusal }
-}
+import {
+  AGENT_SESSION_NOT_ATTACHED,
+  refuseAgentSessionMutation
+} from './structured-agent-session-mutation-refusals'
+export {
+  AGENT_SESSION_NOT_ATTACHED,
+  refuseAgentSessionMutation
+} from './structured-agent-session-mutation-refusals'
 
 export type AgentSessionMutationSessionPreparation =
   | { ok: true }
@@ -73,6 +67,7 @@ export type AgentSessionMutationSessionPreparation =
 export type AgentSessionMutationRequest<TValue> = {
   store: AgentSessionRecordStore
   adapter: StructuredAgentSessionAdapter
+  agents: StructuredAgentRegistry
   logger: StructuredAgentSessionLogger
   callerKey: string
   envelope: AgentSessionMutationEnvelope
@@ -86,7 +81,7 @@ export type AgentSessionMutationRequest<TValue> = {
     record: AgentSessionRecord
   ) => Promise<AgentSessionMutationSessionPreparation>
   publish: (journal: AgentSessionJournal) => void
-  providerChildPhase?: AgentSessionTurnContext['providerChildPhase']
+  wakeDelivery?: (sessionId: string) => void
   now: () => number
 }
 
@@ -102,6 +97,9 @@ export async function admitAndRunAgentSessionMutation<TValue>(
   const conflict = agentSessionFingerprintConflict(envelope, hostFingerprint)
   if (conflict) {
     return refuseAgentSessionMutation(conflict)
+  }
+  if (plan.commandReceipt) {
+    return admitCommandReceiptMutation(request, hostFingerprint, plan.commandReceipt)
   }
   if (request.prepareSession) {
     const ledger = request.store.evaluateMutationOperation({
@@ -175,7 +173,7 @@ export async function admitAndRunAgentSessionMutation<TValue>(
   }
 
   const fence = record.lease.runtimeFence
-  const context = turnContext(request, journal, fence)
+  const context = mutationTurnContext(request, journal, record)
   if (admission.decision === 'replay') {
     const replayed = replayRecordedOperation(request, context, admission.row)
     if (replayed !== 'rerun') {
@@ -262,7 +260,7 @@ async function answerRecordedOperation<TValue>(
     // The row is gone since: the first-run path decides it from scratch.
     return 'rerun'
   }
-  const context = turnContext(request, journal, current.record.lease.runtimeFence)
+  const context = mutationTurnContext(request, journal, current.record)
   return replayRecordedOperation(request, context, current.decision.row)
 }
 
@@ -316,33 +314,4 @@ function admitWithoutLedgerRow(
     ...(operation.conversationWrite ? { conversationWrite: true } : {})
   })
   return { admission, record: evaluated.record }
-}
-
-function turnContext<TValue>(
-  request: AgentSessionMutationRequest<TValue>,
-  journal: AgentSessionJournal,
-  fence: number
-): AgentSessionTurnContext {
-  const persistedOptions = request.store.getRecord(request.envelope.sessionId)?.options
-  return {
-    sessionId: request.envelope.sessionId,
-    journal,
-    fence,
-    adapter: request.adapter,
-    logger: request.logger,
-    ...(persistedOptions ? { persistedOptions } : {}),
-    persistOptions: (options) =>
-      request.store
-        .replaceSessionOptions({
-          sessionId: request.envelope.sessionId,
-          fence,
-          options,
-          now: request.now()
-        })
-        .then(() => undefined),
-    resolvedBy: request.callerKey,
-    publish: () => request.publish(journal),
-    ...(request.providerChildPhase ? { providerChildPhase: request.providerChildPhase } : {}),
-    now: () => request.now()
-  }
 }

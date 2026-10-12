@@ -14,7 +14,7 @@ on:
       - '.github/actions/prepare-native-runtime/**'
       - '.github/actions/prepare-git-compatibility/**'
       - '.github/actions/prepare-headless-compiler/**'
-      - 'config/scripts/headless-detector-compiler-cache*'
+      - 'config/scripts/headless-detector-compiler-cache.mjs'
       - '.github/actions/prepare-linux-package-fixture/**'
       - 'config/docker/headless-serve-shutdown/**'
       - 'config/docker/cli-launch-contract/**'
@@ -24,7 +24,6 @@ on:
       - 'pnpm-workspace.yaml'
       - '.npmrc'
       - '.pnpmfile.cjs'
-      - 'config/tsconfig*.json'
       - 'config/scripts/ensure-native-runtime.mjs'
       - 'config/scripts/rebuild-native-deps.mjs'
       - 'config/scripts/node-pty-job-ownership.cjs'
@@ -44,12 +43,11 @@ on:
       - '.github/workflows/ci-cache-warmup.yml'
       - '.github/actions/prepare-git-compatibility/**'
       - '.github/actions/prepare-headless-compiler/**'
-      - 'config/scripts/headless-detector-compiler-cache*'
+      - 'config/scripts/headless-detector-compiler-cache.mjs'
       - '.github/actions/prepare-linux-package-fixture/**'
       - 'config/docker/headless-serve-shutdown/**'
       - 'config/docker/cli-launch-contract/**'
       - 'config/docker/daemon-shutdown-descendants/**'
-      - 'config/scripts/ci-cache-warmup-workflow.test.mjs'
 
 permissions:
   contents: read
@@ -86,19 +84,6 @@ jobs:
         run: node config/scripts/install-electron-package-binary.mjs
 
       - uses: ./.github/actions/prepare-git-compatibility
-
-      - name: Cache TypeScript incremental state
-        id: typecheck-cache
-        uses: actions/cache@v5
-        with:
-          path: config/*.tsbuildinfo
-          key: tsbuildinfo-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'config/tsconfig*.json') }}-${{ github.sha }}
-          restore-keys: |
-            tsbuildinfo-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'config/tsconfig*.json') }}-
-
-      - name: Refresh TypeScript state for this commit
-        if: steps.typecheck-cache.outputs.cache-hit != 'true'
-        run: pnpm run typecheck
 
   warm-linux-arm:
     runs-on: ubuntu-24.04-arm

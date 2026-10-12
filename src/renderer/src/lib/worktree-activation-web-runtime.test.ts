@@ -15,6 +15,7 @@ import {
   resetWebRuntimeWakeTerminalRespawnForTests,
   shouldSkipWebRuntimeWakeTerminalRespawn
 } from '@/runtime/web-runtime-wake-terminal-respawn'
+import { stubRuntimeEnvironmentBridge } from '../runtime/runtime-environment-bridge-fixture'
 
 registerWorktreeActivationReset()
 
@@ -44,9 +45,7 @@ describe('activateAndRevealWorktree', () => {
           : { ok: false, error: { code: 'test', message: 'stop after recording the request' } }
     )
     ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
-    vi.stubGlobal('window', {
-      api: { runtimeEnvironments: { call: callRuntimeEnvironment } }
-    })
+    stubRuntimeEnvironmentBridge({ call: callRuntimeEnvironment })
     seedEmptyActivatableWorktree(worktree)
     const settings = useAppStore.getState().settings
     useAppStore.setState({
@@ -115,9 +114,7 @@ describe('activateAndRevealWorktree', () => {
       error: { code: 'test', message: 'stop after recording the request' }
     })
     ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
-    vi.stubGlobal('window', {
-      api: { runtimeEnvironments: { call: callRuntimeEnvironment } }
-    })
+    stubRuntimeEnvironmentBridge({ call: callRuntimeEnvironment })
     seedEmptyActivatableWorktree(worktree)
     useAppStore.setState((state) => ({
       settings: state.settings
@@ -169,9 +166,7 @@ describe('activateAndRevealFolderWorkspace', () => {
           : { ok: false, error: { code: 'test', message: 'stop after recording the request' } }
     )
     ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
-    vi.stubGlobal('window', {
-      api: { runtimeEnvironments: { call: callRuntimeEnvironment } }
-    })
+    stubRuntimeEnvironmentBridge({ call: callRuntimeEnvironment })
     const settings = useAppStore.getState().settings
     useAppStore.setState({
       activeView: 'terminal',

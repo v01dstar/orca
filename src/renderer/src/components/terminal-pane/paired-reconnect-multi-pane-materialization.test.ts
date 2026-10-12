@@ -17,6 +17,7 @@ import {
   decodeTerminalStreamFrame,
   decodeTerminalStreamJson
 } from '../../../../shared/terminal-stream-protocol'
+import { stubRuntimeEnvironmentBridge } from '../../runtime/runtime-environment-bridge-fixture'
 
 type SubscriptionCallbacks = {
   onResponse: (response: unknown) => void
@@ -110,9 +111,7 @@ describe('paired client sleep/wake with several remote terminal tabs', () => {
         return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
       }
     )
-    vi.stubGlobal('window', {
-      api: { runtimeEnvironments: { call: runtimeCall, subscribe: runtimeSubscribe } }
-    })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall, subscribe: runtimeSubscribe })
   })
 
   async function attachAllPanes(): Promise<

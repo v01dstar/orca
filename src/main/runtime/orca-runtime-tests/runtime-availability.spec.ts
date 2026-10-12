@@ -2,9 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   FLOATING_TERMINAL_WORKTREE_ID,
   OrcaRuntimeService,
-  electronMocks,
-  registerSshGitProvider,
-  unregisterSshGitProvider
+  electronMocks
 } from '../orca-runtime-test-mocks.spec'
 import {
   HEADLESS_LEAF_ID,
@@ -28,31 +26,6 @@ describe('OrcaRuntimeService', () => {
       rendererGraphEpoch: 0
     })
     expect(runtime.getRuntimeId()).toBeTruthy()
-  })
-
-  it('reports runtime protocol, capabilities, and mobile aliases on status', () => {
-    const runtime = createRuntime()
-
-    const status = runtime.getStatus()
-    expect(typeof status.runtimeProtocolVersion).toBe('number')
-    expect(typeof status.minCompatibleRuntimeClientVersion).toBe('number')
-    expect(status.runtimeProtocolVersion).toBe(status.protocolVersion)
-    expect(status.minCompatibleRuntimeClientVersion).toBe(status.minCompatibleMobileVersion)
-    expect(status.capabilities).toContain('terminal.binary-stream.v1')
-    expect(status.capabilities).toContain('workspace-ports.v1')
-    expect(status.capabilities).toContain('mobile.tasks.v1')
-    expect(status.capabilities).toContain('terminal.quick-commands.v1')
-    expect(status.capabilities).toContain('session-tabs.split-group-placement.v1')
-    expect(status.capabilities).toContain('worktree.create-idempotency.v1')
-    expect(status.worktreeCreateIdempotency).toEqual({ dedupeTtlMs: 60_000 })
-    expect(status.capabilities).toContain('files.mutation-ownership.v1')
-    expect(status.capabilities).toContain('project-host-setup.v1')
-    expect(status.capabilities).toContain('linear.issue-attribute-filter.v1')
-    expect(status.capabilities).not.toContain('browser.screencast.v1')
-    expect(typeof status.protocolVersion).toBe('number')
-    expect(typeof status.minCompatibleMobileVersion).toBe('number')
-    expect(status.protocolVersion).toBeGreaterThanOrEqual(1)
-    expect(status.minCompatibleMobileVersion).toBeGreaterThanOrEqual(0)
   })
 
   it('reports the configured Windows terminal shell on status', () => {
@@ -203,7 +176,6 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => null
     })
     const listWorktrees = vi.fn(() => new Promise<never>(() => {}))
-    registerSshGitProvider('ssh-target', { listWorktrees } as never)
 
     vi.useFakeTimers()
     try {
@@ -223,7 +195,7 @@ describe('OrcaRuntimeService', () => {
       expect(listWorktrees).not.toHaveBeenCalled()
       expect(listProcesses).toHaveBeenCalledOnce()
       expect(listProcesses).toHaveBeenCalledWith(
-        'ssh-target',
+        'ssh:ssh-target',
         expect.objectContaining({ deadlineMs: expect.any(Number) })
       )
       expect(result).toMatchObject({
@@ -232,7 +204,6 @@ describe('OrcaRuntimeService', () => {
       })
     } finally {
       vi.useRealTimers()
-      unregisterSshGitProvider('ssh-target')
     }
   })
 
@@ -263,20 +234,6 @@ describe('OrcaRuntimeService', () => {
     runtime.attachWindow(TEST_WINDOW_ID)
 
     expect(runtime.getStatus().capabilities).toContain('browser.screencast.v1')
-  })
-
-  // Paired desktops open a chat on this host only when it says it admits them by the client's
-  // chosen launch mode; without it, every paired launch quietly becomes a terminal.
-  it('advertises that it admits structured sessions by the client-chosen launch mode', () => {
-    expect(createRuntime().getStatus().capabilities).toContain(
-      'agent-session.structured.client-launch-mode.v1'
-    )
-  })
-
-  it('advertises safe Codex reset-credit RPC support as a static capability', () => {
-    const runtime = createRuntime()
-
-    expect(runtime.getStatus().capabilities).toContain('accounts.codex-reset-credit.v1')
   })
 
   it('routes mobile Codex reset consumption through the account mutation coordinator', async () => {

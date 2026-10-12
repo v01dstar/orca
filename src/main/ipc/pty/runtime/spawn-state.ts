@@ -1,3 +1,4 @@
+import type { SpawnIntent } from '../../../../shared/host-spawn-admission'
 import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../../../providers/types'
 import type { CodexPaneHomeRoute } from '../../../codex/codex-pane-account-registry'
 import type { CodexAccountSelectionTarget } from '../../../codex-accounts/runtime-selection'
@@ -6,6 +7,7 @@ import type { StablePaneOwner } from '../pane/stable-owner'
 import type { PaneSpawnReservation } from '../pane/spawn-reservation'
 import type { AdoptStablePaneResult } from '../ipc/spawn-types'
 import type { PtyBindingSourceExpectation } from '../../../persistence'
+import type { TerminalPanePlacement } from '../../../../shared/terminal-pane-placement'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session-resume'
@@ -32,7 +34,6 @@ export type RuntimePtySpawnState = {
   callerRequestedSessionId: string | undefined
   requestedSessionId: string | undefined
   sessionId: string | undefined
-  effectiveSessionRelayId: string | undefined
   effectiveSessionAppId: string | undefined
   isNewDaemonSession: boolean
   expectedWslDistro: string | null
@@ -47,6 +48,7 @@ export type RuntimePtySpawnState = {
         tabId: string
         leafId: string
         expectedSourceBinding?: PtyBindingSourceExpectation
+        placement?: TerminalPanePlacement
       }
     | undefined
   env: Record<string, string> | undefined
@@ -109,6 +111,7 @@ export type RuntimePtySpawnArgs = {
   initiallyHidden?: boolean
   persistHostSessionBinding?: boolean
   expectedSourceBinding?: PtyBindingSourceExpectation
+  placement?: TerminalPanePlacement
   terminalKittyKeyboardProtocol?: boolean
   terminalColorQueryReplies?: { foreground?: string; background?: string }
   agentSessionEnsure?: {
@@ -116,7 +119,9 @@ export type RuntimePtySpawnArgs = {
     surface: AgentSessionSurfaceBinding
   }
   agentSessionCreateOperationId?: string
+  spawnIntent?: SpawnIntent
   signal?: AbortSignal
+  refuseSleptWorktree?: boolean
   onPtySpawnCommitted?: () => void
   adoptedStablePane?: {
     result: PtySpawnResult
@@ -151,7 +156,6 @@ export function createRuntimePtySpawnState(
     callerRequestedSessionId: undefined,
     requestedSessionId: undefined,
     sessionId: undefined,
-    effectiveSessionRelayId: undefined,
     effectiveSessionAppId: undefined,
     isNewDaemonSession: false,
     expectedWslDistro: null,

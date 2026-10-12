@@ -100,6 +100,8 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   let store: {
     getSettings: () => { activeRuntimeEnvironmentId: string | null }
     updateSettings: ReturnType<typeof vi.fn>
+    removeWorkspaceSessionHost: ReturnType<typeof vi.fn>
+    setRemoteLayoutSnapshot: ReturnType<typeof vi.fn>
   }
 
   beforeEach(() => {
@@ -107,6 +109,8 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     activeRuntimeEnvironmentId = null
     store = {
       getSettings: () => ({ activeRuntimeEnvironmentId }),
+      removeWorkspaceSessionHost: vi.fn(),
+      setRemoteLayoutSnapshot: vi.fn(),
       updateSettings: vi.fn((updates: { activeRuntimeEnvironmentId: string | null }) => {
         activeRuntimeEnvironmentId = updates.activeRuntimeEnvironmentId
       })
@@ -152,6 +156,24 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       'runtimeEnvironments:retryConnectionsNow',
       'runtimeEnvironments:getStatus',
       'runtimeEnvironments:call',
+      'runtimeEnvironments:linkSshAccess',
+      'runtimeEnvironments:unlinkSshAccess',
+      'runtimeEnvironments:createOrcadSshHost',
+      'runtimeEnvironments:resumeOrcadSshHost',
+      'runtimeEnvironments:listPendingOrcadSshProvisioning',
+      'runtimeEnvironments:deployOrcad',
+      'runtimeEnvironments:getOrcadStatus',
+      'runtimeEnvironments:convertSshHostToManagedOrcad',
+      'runtimeEnvironments:listPendingOrcadMigrations',
+      'runtimeEnvironments:previewOrcadDeltaMove',
+      'runtimeEnvironments:moveOrcadDelta',
+      'runtimeEnvironments:keepOrcadServerVersion',
+      'runtimeEnvironments:updateOrcad',
+      'runtimeEnvironments:rollbackOrcad',
+      'runtimeEnvironments:recoverOrcad',
+      'runtimeEnvironments:stopOrcad',
+      'runtimeEnvironments:cancelOrcadStop',
+      'runtimeEnvironments:forgetOrcad',
       'runtimeEnvironments:subscribe',
       'runtimeEnvironments:unsubscribe'
     ])
@@ -178,6 +200,24 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       'runtimeEnvironments:call',
       'runtimeEnvironments:subscribe',
       'runtimeEnvironments:unsubscribe',
+      'runtimeEnvironments:linkSshAccess',
+      'runtimeEnvironments:unlinkSshAccess',
+      'runtimeEnvironments:deployOrcad',
+      'runtimeEnvironments:getOrcadStatus',
+      'runtimeEnvironments:updateOrcad',
+      'runtimeEnvironments:rollbackOrcad',
+      'runtimeEnvironments:recoverOrcad',
+      'runtimeEnvironments:stopOrcad',
+      'runtimeEnvironments:cancelOrcadStop',
+      'runtimeEnvironments:forgetOrcad',
+      'runtimeEnvironments:convertSshHostToManagedOrcad',
+      'runtimeEnvironments:listPendingOrcadMigrations',
+      'runtimeEnvironments:previewOrcadDeltaMove',
+      'runtimeEnvironments:moveOrcadDelta',
+      'runtimeEnvironments:keepOrcadServerVersion',
+      'runtimeEnvironments:createOrcadSshHost',
+      'runtimeEnvironments:resumeOrcadSshHost',
+      'runtimeEnvironments:listPendingOrcadSshProvisioning',
       'runtimeEnvironments:retryConnectionsNow'
     ])
     expect(removeAllListenersMock).toHaveBeenCalledWith('runtimeEnvironments:subscriptionBinary')
@@ -247,6 +287,11 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     })
     expect(activeRuntimeEnvironmentId).toBeNull()
     expect(closeRemoteRuntimeRequestConnectionMock).toHaveBeenCalledWith(added.environment.id)
+    // A removed server's session partition and layout snapshot go too.
+    expect(store.removeWorkspaceSessionHost).toHaveBeenCalledWith(
+      `runtime:${encodeURIComponent(added.environment.id)}`
+    )
+    expect(store.setRemoteLayoutSnapshot).toHaveBeenCalledWith(added.environment.id, null, 'now')
     expect(JSON.stringify(removed)).not.toContain('device-token')
     expect(await list(null, undefined)).toEqual([])
   })
@@ -434,7 +479,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     )
 
     expect(() => remove(null, { selector: added.environment.id })).toThrow(
-      'Choose another Active Server in Advanced'
+      'Choose another one in Advanced before removing it.'
     )
     expect(activeRuntimeEnvironmentId).toBe(added.environment.id)
     expect(store.updateSettings).not.toHaveBeenCalled()

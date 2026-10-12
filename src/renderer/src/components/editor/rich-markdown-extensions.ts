@@ -24,7 +24,7 @@ import {
   createRawMarkdownHtmlBlock,
   createRawMarkdownHtmlInline,
   createRichMarkdownLiteral
-} from './raw-markdown-html'
+} from './raw-markdown-html-nodes'
 import {
   createOrcaDetailsExtensions,
   getRichMarkdownPlaceholder
@@ -44,6 +44,10 @@ import { RichMarkdownCodeBlockLowlight } from './rich-markdown-lowlight'
 import { RichMarkdownTaskList } from './rich-markdown-task-list'
 import { createCachedLowlight } from './rich-markdown-lowlight-cache'
 import { documentResourceAccess } from '@/lib/local-file-access'
+import {
+  readRichMarkdownImageRuntimeContext,
+  resolveRichMarkdownImageUrl
+} from './rich-markdown-image-context'
 
 const lowlight = createCachedLowlight(createLowlight(common))
 
@@ -142,9 +146,7 @@ export function createRichMarkdownExtensions({
             releaseImageLease?.()
             releaseImageLease = undefined
             const fp = this.storage.filePath as string
-            const runtimeContext = this.storage.runtimeContext as
-              | RuntimeFileOperationArgs
-              | undefined
+            const runtimeContext = readRichMarkdownImageRuntimeContext(this.storage)
             const contextVersionAtLoad = getImageContextVersion(this.storage)
             if (src && fp) {
               const access = documentResourceAccess(fp)
@@ -171,7 +173,7 @@ export function createRichMarkdownExtensions({
                 }
               )
             } else if (src) {
-              img.src = src
+              img.src = resolveRichMarkdownImageUrl(this.storage, src)
             } else {
               img.removeAttribute('src')
             }

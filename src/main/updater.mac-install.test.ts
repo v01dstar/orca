@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as ServeSupervisorInstallPark from './updater/serve-supervisor-install-park'
 import { loadUpdaterModule, warmUpdaterModule } from './updater-test-module-loader'
 
 const {
@@ -125,6 +126,18 @@ vi.mock('./updater-nudge', () => ({
 
 vi.mock('./macos-update-running-instances', () => ({
   getMacUpdateRunningInstances: getMacUpdateRunningInstancesMock
+}))
+
+// Why: no registered serve supervisors here, so every blocker is refused as before parking existed.
+vi.mock('./updater/serve-supervisor-install-park', async (importOriginal) => ({
+  ...(await importOriginal<typeof ServeSupervisorInstallPark>()),
+  parkServeSupervisorsForInstall: (_executable: string, blockers: number[]) => ({
+    kind: 'refused',
+    reason: 'unregistered',
+    pids: blockers
+  }),
+  commitServeSupervisorPark: async () => undefined,
+  releaseServeSupervisorPark: async () => undefined
 }))
 
 warmUpdaterModule()

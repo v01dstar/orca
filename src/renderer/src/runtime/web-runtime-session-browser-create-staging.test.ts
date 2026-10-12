@@ -10,9 +10,9 @@ import {
   resetBrowserTabCreateEnvironment,
   stagedBrowserTabMocks,
   stagedBrowserWorkspaces,
-  stubBrowserTabCreateEnvironment,
-  webRuntimeSessionWindowApi
+  stubBrowserTabCreateEnvironment
 } from './web-runtime-session-test-harness'
+import { stubBrowserCreateRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
 
 const mocks = vi.hoisted(() => ({
   getState: vi.fn(),
@@ -172,7 +172,7 @@ describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
   it('shows the tab before the create RPC answers', async () => {
     // Never resolves: everything asserted below has to be true off the click alone.
     const runtimeCall = vi.fn(() => new Promise(() => {}))
-    vi.stubGlobal('window', webRuntimeSessionWindowApi(runtimeCall))
+    stubBrowserCreateRuntimeEnvironmentBridge(runtimeCall)
 
     void createWebRuntimeSessionBrowserTab({
       worktreeId: WORKTREE_ID,
@@ -191,7 +191,7 @@ describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
   it('stages under the very page id it asks the host to mint', async () => {
     advertiseKnownPageId()
     const runtimeCall = vi.fn((_request: { params: { page?: string } }) => new Promise(() => {}))
-    vi.stubGlobal('window', webRuntimeSessionWindowApi(runtimeCall))
+    stubBrowserCreateRuntimeEnvironmentBridge(runtimeCall)
 
     void createWebRuntimeSessionBrowserTab({
       worktreeId: WORKTREE_ID,
@@ -219,7 +219,7 @@ describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
         result: { browserPageId: 'host-minted-page' }
       })
       .mockResolvedValueOnce({ id: 'list', ok: true, result: makeSnapshot() })
-    vi.stubGlobal('window', webRuntimeSessionWindowApi(runtimeCall))
+    stubBrowserCreateRuntimeEnvironmentBridge(runtimeCall)
 
     await expect(
       createWebRuntimeSessionBrowserTab({
@@ -267,7 +267,7 @@ describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
         })
       })
       .mockResolvedValueOnce({ id: 'list', ok: true, result: makeSnapshot() })
-    vi.stubGlobal('window', webRuntimeSessionWindowApi(runtimeCall))
+    stubBrowserCreateRuntimeEnvironmentBridge(runtimeCall)
 
     await expect(
       createWebRuntimeSessionBrowserTab({
@@ -282,10 +282,7 @@ describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
   })
 
   it('unwinds a staged tab without offering it to the reopen stack', async () => {
-    vi.stubGlobal(
-      'window',
-      webRuntimeSessionWindowApi(vi.fn().mockRejectedValue(new Error('offline')))
-    )
+    stubBrowserCreateRuntimeEnvironmentBridge(vi.fn().mockRejectedValue(new Error('offline')))
 
     await expect(
       createWebRuntimeSessionBrowserTab({
@@ -324,7 +321,7 @@ describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
         })
       })
       .mockResolvedValueOnce({ id: 'list', ok: true, result: makeSnapshot() })
-    vi.stubGlobal('window', webRuntimeSessionWindowApi(runtimeCall))
+    stubBrowserCreateRuntimeEnvironmentBridge(runtimeCall)
 
     await expect(
       createWebRuntimeSessionBrowserTab({
@@ -359,7 +356,7 @@ describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
       }
       return Promise.resolve({ id: 'list', ok: true, result: makeSnapshot() })
     })
-    vi.stubGlobal('window', webRuntimeSessionWindowApi(runtimeCall))
+    stubBrowserCreateRuntimeEnvironmentBridge(runtimeCall)
 
     await expect(
       createWebRuntimeSessionBrowserTab({
@@ -410,7 +407,7 @@ describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
       }
       return Promise.resolve({ id: 'list', ok: true, result: makeSnapshot() })
     })
-    vi.stubGlobal('window', webRuntimeSessionWindowApi(runtimeCall))
+    stubBrowserCreateRuntimeEnvironmentBridge(runtimeCall)
 
     await expect(
       createWebRuntimeSessionBrowserTab({
@@ -479,7 +476,7 @@ describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
       }
       return Promise.resolve({ id: 'list', ok: true, result: makeSnapshot() })
     })
-    vi.stubGlobal('window', webRuntimeSessionWindowApi(runtimeCall))
+    stubBrowserCreateRuntimeEnvironmentBridge(runtimeCall)
 
     await expect(
       createWebRuntimeSessionBrowserTab({
@@ -509,7 +506,7 @@ describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
         result: { browserPageId: `host-page-${hostPageCounter}` }
       })
     })
-    vi.stubGlobal('window', webRuntimeSessionWindowApi(runtimeCall))
+    stubBrowserCreateRuntimeEnvironmentBridge(runtimeCall)
 
     const creates = [1, 2, 3].map(() =>
       createWebRuntimeSessionBrowserTab({
@@ -544,7 +541,7 @@ describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
           })
         : Promise.resolve({ id: 'list', ok: true, result: makeSnapshot() })
     )
-    vi.stubGlobal('window', webRuntimeSessionWindowApi(runtimeCall))
+    stubBrowserCreateRuntimeEnvironmentBridge(runtimeCall)
 
     const creates = [1, 2, 3].map(() =>
       createWebRuntimeSessionBrowserTab({

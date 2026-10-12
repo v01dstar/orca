@@ -2,8 +2,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   CLAUDE_HOOK_SETTINGS,
   OPENCLAUDE_HOOK_SETTINGS,
+  getManagedEventHook,
   getManagedLifecycleHook,
-  getRemoteManagedCommand as getClaudeRemoteCommand
+  getRemoteManagedCommand as getClaudeRemoteCommand,
+  getRemoteManagedEventCommand
 } from '../claude/hook-settings'
 import {
   getManagedCommand as getCodexCommand,
@@ -25,6 +27,7 @@ import { getMuseManagedCommand, getMuseRemoteManagedCommand } from '../muse/hook
 import { getDshManagedCommand, getDshRemoteManagedCommand } from '../dsh/hook-settings'
 import { getZCodeManagedCommand, getZCodeRemoteManagedCommand } from '../zcode/hook-settings'
 import { getJcodeManagedCommand, getJcodeRemoteManagedCommand } from '../jcode/hook-settings'
+import { getKiroManagedCommand, getKiroRemoteManagedCommand } from '../kiro/hook-settings'
 import {
   wrapPosixHookCommand,
   wrapWindowsCmdHookCommand,
@@ -64,21 +67,22 @@ function antigravityPosixCommands(path: string): string[] {
   )
 }
 
+function claudeFamilyBuilders(settings: typeof CLAUDE_HOOK_SETTINGS): CommandBuilders {
+  return {
+    local: (path) => [
+      getManagedLifecycleHook(path, settings).command,
+      getManagedEventHook('PostCompact', path, settings).command
+    ],
+    remote: (path) => [
+      getClaudeRemoteCommand(path),
+      getRemoteManagedEventCommand('PostCompact', path)
+    ]
+  }
+}
+
 const buildersByAgent = new Map<string, CommandBuilders>([
-  [
-    'claude',
-    {
-      local: (path) => [getManagedLifecycleHook(path, CLAUDE_HOOK_SETTINGS).command],
-      remote: (path) => [getClaudeRemoteCommand(path)]
-    }
-  ],
-  [
-    'openclaude',
-    {
-      local: (path) => [getManagedLifecycleHook(path, OPENCLAUDE_HOOK_SETTINGS).command],
-      remote: (path) => [getClaudeRemoteCommand(path)]
-    }
-  ],
+  ['claude', claudeFamilyBuilders(CLAUDE_HOOK_SETTINGS)],
+  ['openclaude', claudeFamilyBuilders(OPENCLAUDE_HOOK_SETTINGS)],
   [
     'qoder',
     {
@@ -226,6 +230,13 @@ const buildersByAgent = new Map<string, CommandBuilders>([
     {
       local: (path) => [getJcodeManagedCommand(path)],
       remote: (path) => [getJcodeRemoteManagedCommand(path)]
+    }
+  ],
+  [
+    'kiro',
+    {
+      local: (path) => [getKiroManagedCommand(path)],
+      remote: (path) => [getKiroRemoteManagedCommand(path)]
     }
   ]
 ])

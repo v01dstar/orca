@@ -1,6 +1,7 @@
 import { ipcRenderer } from 'electron'
 import type {
   SshConnectionState,
+  SshEndOldRelayTerminalsResult,
   SshConfigHostListArgs,
   SshConfigHostListResult,
   SshConfigHostResolution,
@@ -9,7 +10,6 @@ import type {
   SshTargetCreateInput,
   SshTarget,
   SshTargetUpdateInput,
-  SshTerminateSessionsResult,
   PortForwardEntry,
   EnrichedDetectedPort
 } from '../../shared/ssh-types'
@@ -52,11 +52,8 @@ export const sshApi = {
   disconnect: (args: { targetId: string }): Promise<void> =>
     ipcRenderer.invoke('ssh:disconnect', args),
 
-  terminateSessions: (args: { targetId: string }): Promise<SshTerminateSessionsResult> =>
-    ipcRenderer.invoke('ssh:terminateSessions', args),
-
-  resetRelay: (args: { targetId: string }): Promise<void> =>
-    ipcRenderer.invoke('ssh:resetRelay', args),
+  endOldRelayTerminals: (args: { targetId: string }): Promise<SshEndOldRelayTerminalsResult> =>
+    ipcRenderer.invoke('ssh:endOldRelayTerminals', args),
 
   getState: async (args: { targetId: string }): Promise<SshConnectionState | null> => {
     const state: unknown = await ipcRenderer.invoke('ssh:getState', args)

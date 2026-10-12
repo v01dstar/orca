@@ -68,6 +68,7 @@ describe('orca cli worktree awareness', () => {
       pairingAddress: '100.64.1.20',
       noPairing: true,
       mobilePairing: false,
+      grantDesktopControl: false,
       recipeJson: false,
       projectRoot: null,
       trustedIssuerFile: null
@@ -81,6 +82,38 @@ describe('orca cli worktree awareness', () => {
 
     expect(serveOrcaAppMock).toHaveBeenCalledWith(
       expect.objectContaining({ trustedIssuerFile: '/etc/instabox/orca-trust.json' })
+    )
+  })
+
+  it.skipIf(process.platform === 'win32')(
+    'turns on supervision only for an explicit --supervise, and never with --recipe-json',
+    async () => {
+      serveOrcaAppMock.mockResolvedValue(0)
+
+      await main(['serve', '--supervise', '--no-pairing'], '/tmp/repo')
+      expect(serveOrcaAppMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({ supervise: true, noPairing: true })
+      )
+
+      await main(['serve', '--no-pairing'], '/tmp/repo')
+      expect(serveOrcaAppMock.mock.lastCall?.[0]).not.toHaveProperty('supervise')
+
+      serveOrcaAppMock.mockClear()
+      await main(
+        ['serve', '--supervise', '--recipe-json', '--project-root', '/workspace/repo'],
+        '/tmp/repo'
+      )
+      expect(serveOrcaAppMock).not.toHaveBeenCalled()
+    }
+  )
+
+  it('forwards the pairing-time desktop-control grant', async () => {
+    serveOrcaAppMock.mockResolvedValue(0)
+
+    await main(['serve', '--grant-desktop-control'], '/tmp/repo')
+
+    expect(serveOrcaAppMock).toHaveBeenCalledWith(
+      expect.objectContaining({ grantDesktopControl: true, mobilePairing: false })
     )
   })
 
@@ -98,6 +131,7 @@ describe('orca cli worktree awareness', () => {
       pairingAddress: '100.64.1.20',
       noPairing: false,
       mobilePairing: true,
+      grantDesktopControl: false,
       recipeJson: false,
       projectRoot: null,
       trustedIssuerFile: null
@@ -125,6 +159,7 @@ describe('orca cli worktree awareness', () => {
       pairingAddress: 'wss://sandbox.example.com',
       noPairing: false,
       mobilePairing: false,
+      grantDesktopControl: false,
       recipeJson: true,
       projectRoot: '/workspace/repo',
       trustedIssuerFile: null

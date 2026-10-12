@@ -13,6 +13,7 @@ import {
 import { resetWebSessionCloseIntentForTests } from './web-session-close-intent'
 import { ENVIRONMENT_ID, WORKTREE_ID, makeSnapshot } from './web-runtime-session-test-harness'
 import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
+import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
 
 const mocks = vi.hoisted(() => ({
   getState: vi.fn(),
@@ -97,9 +98,7 @@ describe('refreshWebRuntimeSessionTabsSnapshot', () => {
       ok: true,
       result: makeSnapshot()
     })
-    vi.stubGlobal('window', {
-      api: { runtimeEnvironments: { call: runtimeCall } }
-    })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall })
     mocks.setState.mockImplementation((updater: (state: unknown) => unknown) =>
       updater({ state: 'before' })
     )
@@ -168,9 +167,7 @@ describe('refreshWebRuntimeSessionTabsSnapshot', () => {
       result: pending,
       _meta: { runtimeId: 'host-runtime' }
     })
-    vi.stubGlobal('window', {
-      api: { runtimeEnvironments: { call: runtimeCall } }
-    })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall })
     mocks.getState.mockReturnValue(state)
     mocks.setState.mockImplementation((updater: (current: unknown) => unknown) => updater(state))
     mocks.recoverWebSessionTerminalOrphansBeforeApply.mockResolvedValueOnce(recovered)
@@ -224,13 +221,7 @@ describe('activateWebRuntimeSessionWorktree', () => {
       })
       .mockResolvedValueOnce({ id: 'list', ok: true, result: snapshot })
 
-    vi.stubGlobal('window', {
-      api: {
-        runtimeEnvironments: {
-          call: runtimeCall
-        }
-      }
-    })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall })
 
     await expect(
       activateWebRuntimeSessionWorktree({

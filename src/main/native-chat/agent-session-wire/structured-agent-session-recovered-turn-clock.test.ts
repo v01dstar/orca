@@ -31,6 +31,7 @@ import { StructuredAgentSessionStatusFeed } from './structured-agent-session-sta
 import { indexedStatusFeedSession } from './structured-agent-session-status-feed-test-session'
 import { StructuredAgentSessionTurnCompletionFeed } from './structured-agent-session-turn-completion-feed'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const SESSION = 'recovered-turn-session'
 const THREAD = 'thread-1'
@@ -60,7 +61,7 @@ async function sessionWithRunningTurn() {
       workspaceId: 'workspace-1',
       hostId: 'local',
       agent: 'codex',
-      providerHandle: { kind: 'codex', threadId: THREAD }
+      providerHandle: codexProviderHandle(THREAD)
     },
     now: () => clock,
     stateDirectory: join(root, SESSION)
@@ -101,7 +102,7 @@ async function sessionWithRunningTurn() {
   const completions = new StructuredAgentSessionTurnCompletionFeed({
     sessions,
     now: () => clock,
-    readStatusState: (sessionId, source) => feed.statusState(sessionId, source)
+    readStatusState: (sessionId, source) => feed.journalProjection(sessionId, source)?.state ?? null
   })
   const completionEvents: AgentSessionTurnCompletionEvent[] = []
   completions.subscribe({ id: 'dot-1', emit: (event) => completionEvents.push(event) })

@@ -6,8 +6,10 @@ import type { RuntimeTerminalSplit } from '../../shared/runtime-types'
 import { makePaneKey, parsePaneKey } from '../../shared/stable-pane-id'
 import { recordPtySurface, spawnSurfaceClaimSequence } from './pty-recorded-surface-topology'
 import { randomUUID } from 'node:crypto'
+import { runtimeSplitPlacement } from './runtime-terminal-spawn-placement'
 import { REJECTED_SPLIT_PTY_STOP_TIMEOUT_MS, ownerSurfacing } from './orca-runtime-core'
 import type { Worktree } from '../../shared/worktree/types'
+import { spawnInAdmittedPane, withdrawRuntimePane } from './runtime-pane-admission'
 
 export class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeWithSplitTerminal {
   protected async splitPtyBackedTerminal(
@@ -55,7 +57,7 @@ export class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeWithSplitT
     const leafId = randomUUID()
     const preAllocatedHandle = this.createPreAllocatedTerminalHandle()
     const paneKey = makePaneKey(parentTabId, leafId)
-    const result = await this.ptyController.spawn({
+    const splitArgs = {
       cols: 120,
       rows: 40,
       cwd: workspace.path,
@@ -69,6 +71,7 @@ export class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeWithSplitT
       tabId: parentTabId,
       leafId,
       persistHostSessionBinding: true,
+      placement: runtimeSplitPlacement(parsedPaneKey.leafId, direction),
       ...(sourceAuthority.persisted
         ? {
             expectedSourceBinding: {
@@ -87,7 +90,8 @@ export class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeWithSplitT
             }
           }
         : {})
-    })
+    }
+    const result = await spawnInAdmittedPane(this.store, this.ptyController, splitArgs)
     this.registerPreAllocatedHandleForPty(result.id, preAllocatedHandle)
     if (result.wslDistro) {
       this.preparePtyExecutionContext(result.id, result.wslDistro)
@@ -148,17 +152,6 @@ export class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeWithSplitT
         revalidateSourceAuthority()
       }
       if (createdPty) {
-        const persisted = this.persistHeadlessTerminalSplit({
-          worktreeId: workspace.id,
-          tabId: parentTabId,
-          leafId,
-          ptyId: createdPty.ptyId,
-          splitFromLeafId: parsedPaneKey.leafId,
-          direction
-        })
-        if (sourceAuthority.persisted && !persisted) {
-          throw new Error('workspace_session_unavailable')
-        }
         this.publishPtyBackedMobileSessionTerminal(workspace.id, createdPty, {
           tabId: parentTabId,
           leafId,
@@ -190,6 +183,7 @@ export class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeWithSplitT
       } catch {
         // Best-effort cleanup; preserve the original split authority error.
       }
+      await withdrawRuntimePane(this.store, splitArgs)
       throw error
     }
     const committedSourceAuthority = sourceAuthority.persisted

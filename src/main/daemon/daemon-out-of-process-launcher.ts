@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { getAppEnvironment } from '../../shared/app-environment'
+import { childProcessHasExited } from '@orca/process-host/process-tree-termination'
 import type { DaemonReplaceReason } from '../../shared/daemon-lifecycle-telemetry'
 import { DaemonClient } from './client'
 import {
@@ -7,13 +8,17 @@ import {
   holdDaemonAdoptionLease,
   reconcileDaemonPidOwnership
 } from './daemon-endpoint-adoption'
+import { LOCAL_PTY_STARTUP_FAIL_OPEN_TIMEOUT_MS } from '../startup/first-window-startup-services'
 import {
+  DAEMON_CHILD_STARTUP_TIMEOUT_MS,
   DaemonEndpointUnavailableError,
   launchDaemonChild,
   terminateLaunchedDaemonChild
 } from './daemon-launched-child'
 import { getDaemonEntryPath, probeDaemonSocket as probeSocket } from './daemon-launch-paths'
-import { materializeRelocatedDaemonHost } from './daemon-host-relocation'
+import { materializeRelocatedDaemonHost, pruneDaemonHostStaging } from './daemon-host-relocation'
+import { appImageDaemonIdentityPath, resolveAppImageDaemonLaunch } from './daemon-appimage-launch'
+import { launchMacDaemonFromStableBundle } from './macos-daemon-launchd'
 import { DAEMON_RECOVERY_BUDGET_MS, daemonRecoveryProbeTimeoutMs } from './daemon-recovery-budget'
 import { cleanupDaemonForProtocol } from './daemon-protocol-cleanup'
 import {
@@ -24,6 +29,7 @@ import {
 } from './daemon-spawner'
 import { PROTOCOL_VERSION } from './types'
 import { prepareDaemonReplacement } from './daemon-replacement-preflight'
+import { ensureDaemonSocketDir } from './daemon-socket-endpoint-path'
 
 // Why: the adapter decides a runtime resolver replacement, but the launcher completes it — and by
 // then the daemon has usually self-retired (dropping its last authenticated client is enough), so
@@ -31,19 +37,22 @@ import { prepareDaemonReplacement } from './daemon-replacement-preflight'
 // The adapter hands the reason across so the launch it triggers reports what actually drove it.
 let attributedReplaceReason: DaemonReplaceReason | null = null
 
+// The fork fallback's readiness wait plus the lease and adapter connects must still fit the gate.
+const MAC_STABLE_LAUNCH_HANDOFF_MS =
+  LOCAL_PTY_STARTUP_FAIL_OPEN_TIMEOUT_MS - DAEMON_CHILD_STARTUP_TIMEOUT_MS - 5_000
+
 export function attributeNextDaemonReplacement(reason: DaemonReplaceReason): void {
   attributedReplaceReason = reason
 }
 
 function createPreservedDaemonHandle(
   runtimeDir: string,
-  protocolVersion = PROTOCOL_VERSION,
   mode?: 'degraded-new-pty-fallback'
 ): DaemonProcessHandle {
   const handle: DaemonProcessHandle = {
     adopted: true,
     shutdown: async () => {
-      await cleanupDaemonForProtocol(runtimeDir, protocolVersion)
+      await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION)
     }
   }
   if (mode) {
@@ -52,15 +61,22 @@ function createPreservedDaemonHandle(
   return handle
 }
 
+export type DaemonLaunchPolicy = {
+  macosLoginSessionWatch?: boolean
+  startupTimeoutMs?: number
+  spawnAdmission?: 'observe' | 'enforce'
+}
+
 export function createOutOfProcessLauncher(
   runtimeDir: string,
-  macosLoginSessionWatch = false
+  { macosLoginSessionWatch = false, startupTimeoutMs, spawnAdmission }: DaemonLaunchPolicy = {}
 ): DaemonLauncher {
   return async (socketPath, tokenPath, suppliedPidPath, suppliedLaunchNonce) => {
     const entryPath = getDaemonEntryPath()
     // Why here: everything up to the fork is one recovery, so the adoption connect and the
     // preflight's probes share a single absolute budget rather than each carrying its own.
-    const recoveryDeadlineMs = Date.now() + DAEMON_RECOVERY_BUDGET_MS
+    const launchStartedAtMs = Date.now()
+    const recoveryDeadlineMs = launchStartedAtMs + DAEMON_RECOVERY_BUDGET_MS
     const pidPath = suppliedPidPath ?? getDaemonPidPath(runtimeDir)
     const launchNonce = suppliedLaunchNonce ?? randomUUID()
     // One-shot: whichever launch consumes it owns the attribution, so a later unrelated launch can't
@@ -68,6 +84,9 @@ export function createOutOfProcessLauncher(
     // what makes a bare module-scoped slot safe — keep it that way or a concurrent launch can steal it.
     const attributedReason = attributedReplaceReason
     attributedReplaceReason = null
+    // Why first: adoption, the preflight probes and health checks all talk to this endpoint, and a
+    // relocated one is only safe to talk to once its directories are proven private and ours.
+    ensureDaemonSocketDir(socketPath)
     let adoptionClient: DaemonClient | null = new DaemonClient({
       socketPath,
       tokenPath
@@ -91,21 +110,26 @@ export function createOutOfProcessLauncher(
     ): Promise<DaemonProcessHandle> => {
       const connectedClient = adoptionClient ?? undefined
       adoptionClient = null
-      return holdDaemonAdoptionLease(
-        createPreservedDaemonHandle(runtimeDir, PROTOCOL_VERSION, mode),
+      return holdDaemonAdoptionLease(createPreservedDaemonHandle(runtimeDir, mode), {
         socketPath,
         tokenPath,
-        connectedClient,
-        undefined,
-        pidPath
-      )
+        pidPath,
+        connectedClient
+      })
     }
     try {
+      const environment = getAppEnvironment()
+      const appImage = resolveAppImageDaemonLaunch({
+        entryPath,
+        appPath: environment.getAppPath(),
+        appVersion: environment.getVersion()
+      })
       const preservedHandle = await prepareDaemonReplacement({
         runtimeDir,
         socketPath,
         tokenPath,
-        entryPath,
+        // Why: must equal the identity the own-mount daemon records, or a survivor never matches.
+        entryPath: appImage ? appImageDaemonIdentityPath(appImage) : entryPath,
         recoveryDeadlineMs,
         attributedReason,
         releaseAdoptionClient,
@@ -116,9 +140,26 @@ export function createOutOfProcessLauncher(
         return preservedHandle
       }
 
-      const userDataPath = getAppEnvironment().getPath('userData')
+      const userDataPath = environment.getPath('userData')
+      const macHandle = await launchMacDaemonFromStableBundle(
+        {
+          entryPath,
+          userDataPath,
+          socketPath,
+          tokenPath,
+          pidPath,
+          launchNonce,
+          macosLoginSessionWatch,
+          ...(spawnAdmission ? { spawnAdmission } : {})
+        },
+        launchStartedAtMs + MAC_STABLE_LAUNCH_HANDOFF_MS
+      )
+      if (macHandle) {
+        return macHandle
+      }
       // Why: on win32 packaged, stage a daemon-host copy in userData so its image escapes the NSIS updater's kill zone; lazy so it's off first-paint. Fail-open: null → in-dir host.
       const relocatedHost = materializeRelocatedDaemonHost()
+      pruneDaemonHostStaging()
       // Fork the relocated entry when available; otherwise the install-dir entry.
       const forkEntryPath = relocatedHost ? relocatedHost.entryPath : entryPath
       let launched
@@ -127,12 +168,15 @@ export function createOutOfProcessLauncher(
           entryPath,
           forkEntryPath,
           relocatedExecPath: relocatedHost?.execPath,
+          appImage: relocatedHost ? undefined : (appImage ?? undefined),
           userDataPath,
           socketPath,
           tokenPath,
           pidPath,
           launchNonce,
-          macosLoginSessionWatch
+          macosLoginSessionWatch,
+          startupTimeoutMs,
+          ...(spawnAdmission ? { spawnAdmission } : {})
         })
       } catch (error) {
         if (!(error instanceof DaemonEndpointUnavailableError) || error.reason !== 'occupied') {
@@ -144,35 +188,23 @@ export function createOutOfProcessLauncher(
         console.warn(
           '[daemon] Endpoint was taken by another daemon during startup — adopting it instead'
         )
-        // Why pidPath: adopting reconciles the PID record against the identity the daemon
-        // reports over hello, repairing a record that names the wrong incarnation. Every other
-        // adoption path passes it; this one skipped it, so the incumbent we adopt here was the
-        // only one whose record never got that repair.
-        return await holdDaemonAdoptionLease(
-          createPreservedDaemonHandle(runtimeDir),
+        // Why pidPath: adopting repairs a PID record that names the wrong incarnation.
+        return await holdDaemonAdoptionLease(createPreservedDaemonHandle(runtimeDir), {
           socketPath,
           tokenPath,
-          undefined,
-          undefined,
           pidPath
-        )
+        })
       }
 
       try {
         return await holdDaemonAdoptionLease(
-          {
-            shutdown: () => terminateLaunchedDaemonChild(launched.child)
-          },
-          socketPath,
-          tokenPath,
-          undefined,
-          launched.identity,
-          pidPath
+          { shutdown: () => terminateLaunchedDaemonChild(launched.child) },
+          { socketPath, tokenPath, pidPath, expectedIdentity: launched.identity }
         )
       } catch (error) {
         if (error instanceof DaemonEndpointOwnershipError) {
           await terminateLaunchedDaemonChild(launched.child)
-          unlinkOwnedDaemonPidFile(pidPath, launched.identity.pid, launchNonce)
+          unlinkOwnedDaemonPidFile(pidPath, launched.identity.pid, launched.identity.launchNonce)
           throw error
         }
         // Why: another client may have adopted this live process; keep its pid record until exit, but remove one published after an early exit.
@@ -182,13 +214,10 @@ export function createOutOfProcessLauncher(
             return
           }
           pidRecordRemoved = true
-          unlinkOwnedDaemonPidFile(pidPath, launched.identity.pid, launchNonce)
+          unlinkOwnedDaemonPidFile(pidPath, launched.identity.pid, launched.identity.launchNonce)
         }
         launched.child.once('exit', removeExitedPidRecord)
-        if (
-          (launched.child.exitCode !== null && launched.child.exitCode !== undefined) ||
-          (launched.child.signalCode !== null && launched.child.signalCode !== undefined)
-        ) {
+        if (childProcessHasExited(launched.child)) {
           launched.child.off('exit', removeExitedPidRecord)
           removeExitedPidRecord()
         }

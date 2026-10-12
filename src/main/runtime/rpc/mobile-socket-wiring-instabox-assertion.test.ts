@@ -61,7 +61,7 @@ describe('MobileSocketWiring instabox assertions', () => {
     expect(devices).toHaveLength(1)
     expect(first.control).toEqual([{ type: 'e2ee_authenticated', deviceToken: devices[0]!.token }])
     expect(devices[0]).toMatchObject({ hangarSessionId: 'session-1', scope: 'runtime' })
-    expect(first.transport.setClientId).toHaveBeenCalledWith(first.ws, devices[0]!.token)
+    expect(first.transport.setClientId).toHaveBeenCalledWith(first.ws, devices[0]!.deviceId)
 
     transportSends(first, '{"id":"rpc-1","method":"status.get"}')
     expect(first.onText.mock.calls[0]?.[0]).toMatchObject({

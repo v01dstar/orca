@@ -1,6 +1,6 @@
 import type { DirEntry } from '../../../shared/filesystem-entry-types'
 import { normalizeRelativePath } from '@/lib/path'
-import { callRuntimeRpc, getActiveRuntimeTarget } from './runtime-rpc-client'
+import { callRuntimeRpc } from './runtime-rpc-client'
 import type { RuntimeFileOperationArgs } from './runtime-file-client-types'
 import {
   assertLocalFilesystemFallbackAllowed,
@@ -16,17 +16,18 @@ import { localAccess } from './runtime-file-read-client'
 
 export async function readRuntimeDirectory(
   context: RuntimeFileOperationArgs,
-  dirPath: string
+  dirPath: string,
+  options: { followSymlinks?: boolean } = {}
 ): Promise<DirEntry[]> {
   const remoteArgs = getRemoteFileArgs(context, dirPath)
   if (!remoteArgs) {
     assertLocalFilesystemFallbackAllowed(context)
-    return window.api.fs.readDir({ dirPath, connectionId: context.connectionId })
+    return window.api.fs.readDir({ dirPath, connectionId: context.connectionId, ...options })
   }
   return callRuntimeRpc<DirEntry[]>(
     remoteArgs.target,
     'files.readDir',
-    { worktree: remoteArgs.worktreeSelector, relativePath: remoteArgs.relativePath },
+    { worktree: remoteArgs.worktreeSelector, relativePath: remoteArgs.relativePath, ...options },
     { timeoutMs: 15_000 }
   )
 }
@@ -189,7 +190,7 @@ export async function deleteRuntimeRelativePath(
   relativePath: string,
   recursive?: boolean
 ): Promise<boolean> {
-  const target = getActiveRuntimeTarget(context.settings)
+  const target = context.target
   if (
     target.kind !== 'environment' ||
     !context.worktreeId ||

@@ -1,5 +1,8 @@
 import type { NativeChatSubagentState } from '../../shared/native-chat-types'
-import { MAX_SUBAGENT_FIELD_CHARS } from '../../shared/native-chat-subagent-summary'
+import {
+  MAX_SUBAGENT_FIELD_CHARS,
+  canReplaceSubagentState
+} from '../../shared/native-chat-subagent-summary'
 
 const MAX_CHILDREN = 128
 const MAX_SETTLED_TURNS = 256
@@ -87,7 +90,11 @@ export class CodexSubagentExecutions {
     ) {
       return null
     }
-    const execution = { turnId, state: settled ?? state }
+    // A turn's first outcome latches, except lost contact: a later verdict still says how it ended.
+    const execution = {
+      turnId,
+      state: settled !== undefined && !canReplaceSubagentState(settled, state) ? settled : state
+    }
     if (state !== 'working') {
       this.settledTurns.set(key, execution.state)
       while (this.settledTurns.size > MAX_SETTLED_TURNS) {
@@ -132,6 +139,27 @@ export class CodexSubagentExecutions {
   /** The child as last observed, without creating one. */
   find(agentThreadId: string): Readonly<CodexExecutionChild> | undefined {
     return this.children.get(agentThreadId)
+  }
+
+  /** The child and every child it spawned, at any depth. */
+  lineage(agentThreadId: string): CodexExecutionChild[] {
+    const lineage: CodexExecutionChild[] = []
+    const seen = new Set<string>()
+    const pending = [agentThreadId]
+    for (let id = pending.pop(); id !== undefined; id = pending.pop()) {
+      const child = this.children.get(id)
+      if (!child || seen.has(id)) {
+        continue
+      }
+      seen.add(id)
+      lineage.push(child)
+      for (const spawned of this.children.values()) {
+        if (spawned.spawnerThreadId === id) {
+          pending.push(spawned.agentThreadId)
+        }
+      }
+    }
+    return lineage
   }
 
   workingChildren(): CodexExecutionChild[] {

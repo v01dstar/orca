@@ -1,4 +1,5 @@
 import { readOpenCodeNativeChatTranscriptFull } from './transcript-opencode'
+import { isENOENT } from '../ipc/filesystem-path-containment'
 import type {
   AgentType,
   NativeChatMessage,
@@ -44,7 +45,12 @@ export async function readNativeChatTranscript(
   options: ReadTranscriptOptions = {}
 ): Promise<ReadTranscriptResult> {
   if (resolveNativeChatTranscriptAgent(agent) === 'opencode') {
-    return readOpenCodeNativeChatTranscriptFull(sessionId)
+    return readOpenCodeNativeChatTranscriptFull(
+      sessionId,
+      {},
+      undefined,
+      agent === 'zcode' ? 'zcode' : undefined
+    )
   }
   let filePath: string | null
   try {
@@ -75,7 +81,7 @@ export async function readNativeChatTranscript(
   } catch (err) {
     // Why: ENOENT after a successful resolve is the same first-flush/rotation
     // race as an unresolved path — keep it retry-worthy (#8401).
-    if ((err as NodeJS.ErrnoException | null)?.code === 'ENOENT') {
+    if (isENOENT(err)) {
       return { error: errorMessage(err), notFound: true }
     }
     return { error: errorMessage(err) }

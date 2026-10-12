@@ -65,6 +65,18 @@ export type StructuredAgentSessionResumeFailure = StructuredAgentSessionResumeCa
   retryable: boolean
 }
 
+/** The agents whose offers a caller may see and act on; absent, every agent this host runs. A
+ *  client too old to show an agent's chat never lists, resumes, or dismisses that agent's offers. */
+export type StructuredAgentSessionRestartAudience = (agent: string) => boolean
+
+/** The rows `audience` may see; all of them without one. */
+export function restartRowsFor<T extends { agent: string }>(
+  rows: T[],
+  audience: StructuredAgentSessionRestartAudience | undefined
+): T[] {
+  return audience ? rows.filter((row) => audience(row.agent)) : rows
+}
+
 export type StructuredAgentSessionResumableSet = {
   candidates: StructuredAgentSessionResumeCandidate[]
   /** Markers the chat has provably moved past, or whose conversation forked. Every ending deletes:
@@ -99,6 +111,10 @@ export function structuredAgentSessionResumableSet(
   for (const marker of input.markers) {
     const record = input.getRecord(marker.sessionId)
     if (!record || !input.supportsRecord(record)) {
+      continue
+    }
+    if (record.providerContextBoundary?.operationId !== marker.contextClearOperationId) {
+      superseded.push(marker)
       continue
     }
     // The lease must be free and adjudicated. A contested or still-reconciling record is somebody

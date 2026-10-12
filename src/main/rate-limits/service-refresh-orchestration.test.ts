@@ -348,7 +348,7 @@ describe('RateLimitService', () => {
     const refresh = service.refresh().then(() => {
       refreshResolved = true
     })
-    await flushMicrotasks()
+    await flushMicrotasks(8)
 
     const pendingGrokState = service.getState()
     expect(pendingGrokState.claude?.status).toBe('ok')
@@ -458,6 +458,9 @@ describe('RateLimitService', () => {
     )
     expect(fetchCodexRateLimits).toHaveBeenCalledTimes(1)
     expect(fetchGeminiRateLimits).toHaveBeenCalledTimes(1)
+    expect(fetchCodexRateLimits).toHaveBeenCalledWith(
+      expect.objectContaining({ networkProxySettings, signal: expect.any(AbortSignal) })
+    )
     expect(fetchGeminiRateLimits).toHaveBeenCalledWith(true)
     expect(fetchOpenCodeGoUsage).toHaveBeenCalledTimes(1)
     expect(fetchOpenCodeGoUsage).toHaveBeenCalledWith(

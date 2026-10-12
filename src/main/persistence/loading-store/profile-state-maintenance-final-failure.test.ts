@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
 import { ProfileStateWriterError } from '../profile-state/profile-state-writer-errors'
 import {
@@ -19,7 +19,6 @@ describe('quit during failed profile maintenance', () => {
   it('retries a known failed checkpoint and persists shutdown edits before closing', async () => {
     const { store, authority, readState, dataFile } = await createWorkerMaintenanceFixture()
     vi.spyOn(console, 'error').mockImplementation(() => {})
-    store.upsertSshRemotePtyLease({ targetId: 'remote', ptyId: 'pty', state: 'attached' })
     await store.flushPendingOrThrowAsync()
     const started = maintenanceBarrier()
     const release = maintenanceBarrier()
@@ -33,8 +32,8 @@ describe('quit during failed profile maintenance', () => {
     store.updateSettings({ theme: 'dark' })
     const failed = expect(store.beginProfileMaintenance()).rejects.toThrow('SQLITE_BUSY')
     await started.promise
-    store.markSshRemotePtyLeasesForShutdown('remote', 'detached')
-    const final = store.flushFinalOrThrowAsync({ exportJsonCompatibility: true })
+    store.getWorkspaceSession().activeTabId = 'last-tab'
+    const final = store.flushFinalOrThrowAsync()
     const result = final.catch((error: unknown) => error)
     release.resolve()
     await failed
@@ -42,9 +41,9 @@ describe('quit during failed profile maintenance', () => {
     expect(checkpoint).toHaveBeenCalledTimes(2)
     expect(readState()).toMatchObject({
       settings: { theme: 'dark' },
-      sshRemotePtyLeases: [expect.objectContaining({ state: 'detached' })]
+      workspaceSession: { activeTabId: 'last-tab' }
     })
-    expect(JSON.parse(readFileSync(dataFile, 'utf8'))).toEqual(readState())
+    expect(existsSync(dataFile)).toBe(false)
   })
 
   it.each(['indeterminate', 'changed-source'] as const)(

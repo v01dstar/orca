@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import { Loader2, Server, ServerOff } from 'lucide-react'
-import { toast } from 'sonner'
+import { useSshConnectFailureToast } from '@/ssh/ssh-old-relay-terminals-action'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
@@ -83,6 +83,7 @@ export function WorktreeCardSshHostControl({
   // this host dial the same connection, and the store status lags a click by one IPC hop.
   const inFlight = useSshConnectInFlight(targetId)
 
+  const showConnectFailure = useSshConnectFailureToast()
   const handleConnect = useCallback(async () => {
     if (isSshConnectInFlight(targetId) || isConnectingSshStatus(status)) {
       return
@@ -109,13 +110,14 @@ export function WorktreeCardSshHostControl({
         }
       }
     } catch (err) {
-      toast.error(
-        err instanceof Error
-          ? err.message
-          : translate(
-              'auto.components.sidebar.WorktreeCardSshHostControl.connectFailed',
-              'SSH connection failed'
-            )
+      showConnectFailure(
+        targetId,
+        err,
+        translate(
+          'auto.components.sidebar.WorktreeCardSshHostControl.connectFailed',
+          'SSH connection failed'
+        ),
+        { local: !sshOwnerEnvironmentId }
       )
       // Why: a failed connect usually means the renderer's target metadata is stale
       // (target removed, or re-added under a new id). Resync so the control converges to
@@ -132,7 +134,7 @@ export function WorktreeCardSshHostControl({
         })().catch(() => {})
       }
     }
-  }, [setSshConnectionState, sshOwnerEnvironmentId, status, targetId])
+  }, [setSshConnectionState, showConnectFailure, sshOwnerEnvironmentId, status, targetId])
 
   // A live connection outranks a stale removal tombstone. A null status is a runtime-owned
   // target: no renderer-reachable connect, and the card has always shown the plain host glyph

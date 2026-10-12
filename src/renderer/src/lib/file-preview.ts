@@ -1,6 +1,7 @@
 import { toast } from 'sonner'
 import { absolutePathToFileUri } from '@/components/editor/markdown-internal-links'
 import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
+import { webClientDocPreviewRefusal } from '@/lib/doc-preview-web-client'
 import { useCallback } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { basename, getRelativePathInsideRoot } from '@/lib/path'
@@ -61,7 +62,7 @@ export function getWorkspaceFilePreviewPlan(
     }
   }
   if (connectionId !== null) {
-    return { status: 'doc-preview' }
+    return webClientDocPreviewRefusal() ?? { status: 'doc-preview' }
   }
   // Why: the doc preview needs no browser at all, so a paired runtime without the
   // screencast capability still previews documents.
@@ -76,7 +77,7 @@ export function getWorkspaceFilePreviewPlan(
         reason: 'outside-worktree'
       }
     }
-    return { status: 'doc-preview' }
+    return webClientDocPreviewRefusal() ?? { status: 'doc-preview' }
   }
   const availability = getClientCreationActionPolicy(state, worktreeId)['managed-browser']
   if (availability.state !== 'enabled') {
@@ -147,7 +148,10 @@ export function getWorkspaceFileBrowserOpenTarget(params: {
   filePath: string
   worktreeId: string
 }): WorkspaceFileBrowserOpenTarget {
-  if (getConnectionIdForFile(params.worktreeId, params.filePath) !== null) {
+  if (
+    getConnectionIdForFile(params.worktreeId, params.filePath) !== null ||
+    getRuntimeEnvironmentIdForWorktree(useAppStore.getState(), params.worktreeId)
+  ) {
     // Why: Chromium resolves file:// URLs on the local machine. Remote files
     // need an Orca-served URL before the browser can render them correctly.
     return {
@@ -249,6 +253,11 @@ export function convertBrowserPageToWorkspaceDoc(
   docLocation: BrowserPageDocLocation,
   options?: { leg?: BrowserPageConversionLeg }
 ): 'activated-existing' | 'opened-in-owning-worktree' | 'converted' | 'failed' {
+  const webRefusal = webClientDocPreviewRefusal()
+  if (webRefusal) {
+    toast.error(webRefusal.message)
+    return 'failed'
+  }
   const state = useAppStore.getState()
   // Why a history leg skips reuse: Back and Forward both mean "this tab, as it was" — activating
   // another tab showing the document would leave this one a web page with live provenance, so

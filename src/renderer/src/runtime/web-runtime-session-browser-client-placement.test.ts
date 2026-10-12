@@ -16,6 +16,7 @@ import {
   resetBrowserTabCreateEnvironment,
   stubBrowserTabCreateEnvironment
 } from './web-runtime-session-test-harness'
+import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
 
 const mocks = vi.hoisted(() => ({
   getState: vi.fn(),
@@ -213,12 +214,8 @@ function stubRuntimeApi(
   preparePlacement: ReturnType<typeof vi.fn>,
   runtimeCall: ReturnType<typeof vi.fn>
 ): void {
-  vi.stubGlobal('window', {
-    api: {
-      runtimeEnvironments: {
-        prepareBrowserClientHostPlacement: preparePlacement,
-        call: runtimeCall
-      }
-    }
+  stubRuntimeEnvironmentBridge({
+    prepareBrowserClientHostPlacement: preparePlacement,
+    call: runtimeCall
   })
 }

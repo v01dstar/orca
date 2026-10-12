@@ -11,9 +11,8 @@ import {
 } from '../web-session-tabs-sync'
 import type { WebSessionTabsSyncState } from '../web-session-tabs-sync'
 import {
-  hasRetiredValue,
+  admitRetiredValueUnderAuthority,
   noteRetiredValue,
-  reviveRetiredValue,
   sameSessionTabsPublicationLineage
 } from '../web-session-tabs-sync/publisher-identity-fences'
 import { knownStructuredSessionWorktreeIds } from '../local-structured-session-tab-retirement'
@@ -52,6 +51,8 @@ export type StructuredSessionSnapshotApplyOptions = {
    * whereas a subscription frame can be, and stays fenced.
    */
   authoritative?: boolean
+  /** Re-applies a publication at the version already applied: the window removed a chat early. */
+  reacceptCurrentVersion?: boolean
   /** Sequence allocated when the inventory request began, before a close can race its reply. */
   authoritativeInventory?: number
   /** Called for each snapshot the retired-epoch fence rejects; the repair lane listens here. */
@@ -114,7 +115,7 @@ export function applyLocalStructuredSessionTabSnapshots<
       continue
     }
     // "Ask me later", not an answer: a worktree the host holds no entry for still answers a forced
-    // inventory, with `none` at version 0. Absence there proves nothing, so it neither applies nor
+    // inventory, with the `none` placeholder epoch. Absence there proves nothing, so it neither applies nor
     // records — recording it would retire the epoch below. Its cursor is left alone, so a genuinely
     // stale frame arriving late is still fenced.
     if (!hostSnapshotAffirmsWorktreeContents(snapshot)) {
@@ -130,14 +131,24 @@ export function applyLocalStructuredSessionTabSnapshots<
     // headless rebuild), and the structured publish inherits the worktree's existing epoch rather
     // than minting its own. So a retired epoch is not proof of a dead generation — only authority
     // can settle it, and the repair lane goes and asks.
-    if (hasRetiredValue(epochHistory, snapshot.publicationEpoch) && !sharesLineage) {
-      if (!options.authoritative) {
-        options.onRetiredEpochDrop?.(snapshot.worktree, snapshot.publicationEpoch)
-        continue
-      }
-      reviveRetiredValue(epochHistory, snapshot.publicationEpoch)
+    if (
+      !sharesLineage &&
+      !admitRetiredValueUnderAuthority(
+        epochHistory,
+        snapshot.publicationEpoch,
+        options.authoritative === true
+      )
+    ) {
+      options.onRetiredEpochDrop?.(snapshot.worktree, snapshot.publicationEpoch)
+      continue
     }
-    if (prior && sharesLineage && snapshot.snapshotVersion <= prior.snapshotVersion) {
+    if (
+      prior &&
+      sharesLineage &&
+      (options.reacceptCurrentVersion
+        ? snapshot.snapshotVersion < prior.snapshotVersion
+        : snapshot.snapshotVersion <= prior.snapshotVersion)
+    ) {
       continue
     }
     const effectiveSnapshot = suppressCancelledStructuredSessionTabs(snapshot, { kind: 'local' })

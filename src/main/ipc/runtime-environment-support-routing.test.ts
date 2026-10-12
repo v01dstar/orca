@@ -1,3 +1,4 @@
+import { pairedRuntimeConnectionFromOffer } from '../../shared/paired-runtime-connection'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { KnownRuntimeEnvironment } from '../../shared/runtime-environments'
 import {
@@ -8,10 +9,18 @@ import {
   runtimeEnvironmentCapabilityOutcome
 } from './runtime-environment-capability-evidence'
 
-const { supportsMock, clearSupportMock, resolveEnvironmentMock } = vi.hoisted(() => ({
+const {
+  supportsMock,
+  clearSupportMock,
+  resolveEnvironmentMock,
+  subscribeSharedMock,
+  subscribeLegacyMock
+} = vi.hoisted(() => ({
   supportsMock: vi.fn(),
   clearSupportMock: vi.fn(),
-  resolveEnvironmentMock: vi.fn()
+  resolveEnvironmentMock: vi.fn(),
+  subscribeSharedMock: vi.fn(),
+  subscribeLegacyMock: vi.fn()
 }))
 
 vi.mock('./runtime-environment-shared-control-support', () => ({
@@ -23,7 +32,19 @@ vi.mock('../../shared/runtime-environment-store', async (importOriginal) => ({
   resolveEnvironment: resolveEnvironmentMock
 }))
 
+vi.mock('./runtime-environment-request-connections', async (importOriginal) => ({
+  ...(await importOriginal()),
+  subscribeRemoteRuntimeSharedControlRequest: subscribeSharedMock
+}))
+vi.mock('../../shared/remote-runtime-client', async (importOriginal) => ({
+  ...(await importOriginal()),
+  subscribeRemoteRuntimeRequest: subscribeLegacyMock
+}))
+import type { subscribeRemoteRuntimeSharedControlRequest } from './runtime-environment-request-connections'
+import type { subscribeRemoteRuntimeRequest } from '../../shared/remote-runtime-client'
+
 import {
+  subscribeSupportRoutedRuntimeEnvironment,
   routeRuntimeEnvironmentCallBySupport,
   routeRuntimeEnvironmentSubscriptionBySupport
 } from './runtime-environment-support-routing'
@@ -32,6 +53,8 @@ beforeEach(() => {
   resetRuntimeEnvironmentCapabilityEvidence()
   supportsMock.mockReset()
   clearSupportMock.mockReset()
+  subscribeSharedMock.mockReset()
+  subscribeLegacyMock.mockReset()
   resolveEnvironmentMock.mockReset()
   resolveEnvironmentMock.mockReturnValue(environment())
 })
@@ -138,7 +161,10 @@ function acceptedOutcome(verdict: 'capable' | 'absent') {
     deviceToken: 'token',
     publicKeyB64: 'key'
   }
-  const evidence = captureRuntimeEnvironmentCapabilityEvidence(environmentId, pairing)
+  const evidence = captureRuntimeEnvironmentCapabilityEvidence(
+    environmentId,
+    pairedRuntimeConnectionFromOffer(pairing)
+  )
   applyRuntimeEnvironmentCapabilityVerdict({ evidence, verdict, runtimeId: 'runtime' })
   return runtimeEnvironmentCapabilityOutcome(evidence, verdict, 'runtime')
 }
@@ -178,3 +204,67 @@ function deferred<T>() {
   })
   return { promise, resolve }
 }
+
+it('cancels only the waiting subscription while a sibling waits on the same support probe', async () => {
+  const probe = deferred<ReturnType<typeof acceptedOutcome>>()
+  supportsMock.mockReturnValue(probe.promise)
+  const supported = vi.fn().mockResolvedValue({ requestId: 'sibling' })
+  const unsupported = vi.fn()
+  const controller = new AbortController()
+  const args = {
+    userDataPath: '/profile',
+    environment: environment(),
+    timeoutMs: 1000,
+    isCurrent: () => true,
+    supported,
+    unsupported
+  }
+  const abandoned = routeRuntimeEnvironmentSubscriptionBySupport({
+    ...args,
+    signal: controller.signal
+  })
+  const sibling = routeRuntimeEnvironmentSubscriptionBySupport(args)
+  const rejection = expect(abandoned).rejects.toMatchObject({ name: 'AbortError' })
+  controller.abort()
+  await rejection
+  expect(supported).not.toHaveBeenCalled()
+  probe.resolve(acceptedOutcome('capable'))
+  await expect(sibling).resolves.toMatchObject({ subscription: { requestId: 'sibling' } })
+  expect(supported).toHaveBeenCalledOnce()
+  expect(unsupported).not.toHaveBeenCalled()
+})
+
+it.each(['capable', 'absent'] as const)(
+  'forwards consumer cancellation into the %s subscription setup',
+  async (verdict) => {
+    supportsMock.mockResolvedValue(acceptedOutcome(verdict))
+    const setup = vi.fn(
+      (signal?: AbortSignal) =>
+        new Promise<never>((_resolve, reject) => {
+          signal?.addEventListener('abort', () => reject(signal.reason), { once: true })
+        })
+    )
+    subscribeSharedMock.mockImplementation(
+      (...args: Parameters<typeof subscribeRemoteRuntimeSharedControlRequest>) => setup(args[6])
+    )
+    subscribeLegacyMock.mockImplementation(
+      (...args: Parameters<typeof subscribeRemoteRuntimeRequest>) => setup(args[5]?.signal)
+    )
+    const controller = new AbortController()
+    const pending = subscribeSupportRoutedRuntimeEnvironment({
+      userDataPath: '/profile',
+      environment: environment(),
+      method: 'files.watch',
+      params: {},
+      timeoutMs: 1000,
+      callbacks: { onEvent: vi.fn(), onClose: vi.fn() },
+      isCurrent: () => true,
+      signal: controller.signal
+    })
+    await vi.waitFor(() => expect(setup).toHaveBeenCalledWith(controller.signal))
+    const rejection = expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+    controller.abort()
+    await rejection
+    expect(setup).toHaveBeenCalledOnce()
+  }
+)

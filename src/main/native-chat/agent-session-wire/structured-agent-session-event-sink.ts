@@ -7,11 +7,15 @@ import type {
 } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionTurnActivity } from '../../../shared/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import type { JournalLifecycleMutationInput } from '../agent-session-journal/journal-row-builders'
+import type { JournalLifecycleIdentityMutationInput } from '../agent-session-journal/journal-row-builders'
 import { estimateStructuredAgentSessionItemBytes } from './structured-agent-session-event-sink-estimate'
 import { StructuredAgentSessionSinkQueue } from './structured-agent-session-event-sink-queue'
 import { structuredAgentSessionJournalAppendOptions } from './structured-agent-session-journal-append-options'
 import { createStructuredAgentSessionResolvedAppend } from './structured-agent-session-resolved-append'
+import {
+  createStructuredAgentSessionTransitionMembers,
+  type StructuredAgentSessionTransitionSink
+} from './structured-agent-session-transition'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 export type StructuredAgentSessionSinkAdmission =
@@ -80,7 +84,7 @@ export type StructuredAgentSessionRevisionOptions = StructuredAgentSessionItemAp
 /** Compatibility alias for lifecycle callers that already use this resolver. */
 export type StructuredAgentSessionLifecycleIdentityResolver = StructuredAgentSessionIdentityResolver
 
-export type StructuredAgentSessionEventSink = {
+export type StructuredAgentSessionEventSink = StructuredAgentSessionTransitionSink & {
   appendItem(
     identity: AgentJournalItemIdentity,
     body: AgentJournalItemBody,
@@ -146,12 +150,12 @@ export type StructuredAgentSessionEventSink = {
   journalStopDecidesTurn?(turnId: string, endedAt: number): boolean
   appendLifecycleBatch?(
     settlementId: string,
-    mutations: readonly JournalLifecycleMutationInput[],
+    mutations: readonly JournalLifecycleIdentityMutationInput[],
     options?: StructuredAgentSessionAppendOptions
   ): StructuredAgentSessionSinkAdmission | void
   tryAppendLifecycleBatch?(
     settlementId: string,
-    mutations: readonly JournalLifecycleMutationInput[],
+    mutations: readonly JournalLifecycleIdentityMutationInput[],
     options?: StructuredAgentSessionAppendOptions
   ): StructuredAgentSessionSinkAdmission
   tryPublish?(options?: StructuredAgentSessionPublishOptions): StructuredAgentSessionSinkAdmission
@@ -231,7 +235,7 @@ export function createDeferredStructuredAgentSessionEventSink(deps: {
 
   const appendLifecycleBatch = (
     settlementId: string,
-    mutations: readonly JournalLifecycleMutationInput[],
+    mutations: readonly JournalLifecycleIdentityMutationInput[],
     options: StructuredAgentSessionAppendOptions = {}
   ): StructuredAgentSessionSinkAdmission =>
     queue.submit(
@@ -285,6 +289,7 @@ export function createDeferredStructuredAgentSessionEventSink(deps: {
       },
       tryAppendItem: appendItem,
       ...resolvedAppend,
+      ...createStructuredAgentSessionTransitionMembers(queue),
       journalEpoch: queue.journalEpoch,
       journalLinkage: queue.journalLinkage,
       journalStopDecidesTurn: queue.journalStopDecidesTurn,

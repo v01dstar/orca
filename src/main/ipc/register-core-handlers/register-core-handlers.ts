@@ -227,16 +227,16 @@ export function registerCoreHandlers(
   void registerInstaboxHandlers().catch((error: unknown) =>
     console.error('[instabox] Failed to start instabox integration:', error)
   )
+  // Session history and terminal resume are not chats; a refused host leaves nothing to check.
+  const ensureStructuredSessionOwnership = () =>
+    ensureStructuredAgentSessionHostUnlessRefused(() => runtime.ensureStructuredAgentSessionHost())
   registerAiVaultSearchHandlers({
     callRuntimeSearch: (environmentId, method, params) =>
-      callRuntimeSessionSearch(app.getPath('userData'), environmentId, method, params)
+      callRuntimeSessionSearch(app.getPath('userData'), environmentId, method, params),
+    ensureStructuredSessionOwnership
   })
   registerAiVaultHandlers({
-    // Session history and terminal resume are not chats; a refused host leaves nothing to check.
-    ensureStructuredSessionOwnership: () =>
-      ensureStructuredAgentSessionHostUnlessRefused(() =>
-        runtime.ensureStructuredAgentSessionHost()
-      ),
+    ensureStructuredSessionOwnership,
     getAdditionalCodexHomePaths: lifecycleOptions.getAdditionalAiVaultCodexHomePaths,
     prepareSessionResume: lifecycleOptions.prepareAiVaultSessionResume,
     getActiveRuntimeAiVaultHostInfos: () =>

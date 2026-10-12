@@ -10,6 +10,7 @@ import {
   type RemoteRuntimeMultiplexedTerminal
 } from './remote-runtime-terminal-multiplexer'
 import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
+import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
 
 // Why: sendFrame gates on socket readiness alone, so a dropped stream handle reported success
 // while the host discarded the frames for an unknown stream id.
@@ -39,7 +40,7 @@ describe('remote terminal stale stream frames', () => {
         }
       }
     })
-    vi.stubGlobal('window', { api: { runtimeEnvironments: { subscribe } } })
+    stubRuntimeEnvironmentBridge({ subscribe })
   })
 
   afterEach(() => {

@@ -2,7 +2,9 @@ import type { RuntimeEnvironmentStatus } from './runtime-host-status'
 import {
   LOCAL_EXECUTION_HOST_ID,
   getLocalExecutionHostLabel,
+  getRepoExecutionHostId,
   getSettingsFocusedExecutionHostId,
+  getSshTargetIdForExecutionHost,
   isRuntimeOwnedSshTargetId,
   parseExecutionHostId,
   toRuntimeExecutionHostId,
@@ -17,14 +19,10 @@ import type { SshConnectionState, SshConnectionStatus } from './ssh-types'
 import type { RuntimeEnvironmentSource } from './runtime-environments'
 import type { GlobalSettings } from './global-settings-types'
 import type { Repo } from './repo-types'
+import { annotateManagedOrcadExecutionHosts } from './managed-orcad-execution-host'
+import { getSshConnectionHealth, type ExecutionHostHealth } from './execution-host-health'
 
-export type ExecutionHostHealth =
-  | 'local'
-  | 'available'
-  | 'connecting'
-  | 'blocked'
-  | 'disconnected'
-  | 'error'
+export type { ExecutionHostHealth } from './execution-host-health'
 
 export type ExecutionHostRegistryEntry = {
   id: ExecutionHostId
@@ -41,12 +39,16 @@ export type ExecutionHostRegistryEntry = {
   platform?: NodeJS.Platform | null
   remoteControlState?: RuntimeStatus['remoteControl']
   source?: RuntimeEnvironmentSource
+  /** See managed-orcad-execution-host: pairs an SSH host with its managed server. */
+  aliasHostIds?: readonly ExecutionHostId[]
+  mergedIntoHostId?: ExecutionHostId
 }
 
 type RuntimeEnvironmentSummary = {
   id: string
   name?: string | null
   source?: RuntimeEnvironmentSource
+  orcadDeployment?: { sshTargetId: string } | null
 }
 
 type RuntimeStatusByEnvironmentId = ReadonlyMap<string, RuntimeEnvironmentStatus>
@@ -106,24 +108,6 @@ function runtimeControlHealth(
   }
 }
 
-function sshHealth(state: SshConnectionState | undefined): ExecutionHostHealth {
-  switch (state?.status) {
-    case 'connected':
-      return 'available'
-    case 'connecting':
-    case 'deploying-relay':
-    case 'reconnecting':
-      return 'connecting'
-    case 'auth-failed':
-    case 'error':
-    case 'reconnection-failed':
-      return 'error'
-    case 'disconnected':
-    case undefined:
-      return 'disconnected'
-  }
-}
-
 function setHost(
   hosts: Map<ExecutionHostId, ExecutionHostRegistryEntry>,
   entry: ExecutionHostRegistryEntry
@@ -157,19 +141,25 @@ function addRuntimeHost(
   const metadata = status ?? snapshot?.status
   const compatibility = runtimeCompatibility(metadata)
   const remoteControl = runtimeStatus?.remoteControl ?? status?.remoteControl
+  // Why: the status owner withdraws `verified` whenever a ready socket drops, so a verified
+  // answer proves the host reachable while shared control is still connecting (#10704).
+  const reachable =
+    snapshot?.transport === 'ready'
+      ? snapshot.verification !== 'checking'
+      : snapshot?.verification === 'verified' && snapshot.transport !== 'disconnected'
   const controlHealth = snapshot?.retired
     ? 'disconnected'
     : snapshot?.verification === 'blocked'
       ? 'blocked'
-      : !runtimeStatus ||
-          snapshot?.verification === 'checking' ||
-          snapshot?.transport === 'disconnected' ||
-          snapshot?.transport === 'connecting'
-        ? 'connecting'
-        : snapshot?.transport === 'ready'
-          ? compatibility?.kind === 'blocked'
-            ? 'blocked'
-            : 'available'
+      : reachable
+        ? compatibility?.kind === 'blocked'
+          ? 'blocked'
+          : 'available'
+        : !runtimeStatus ||
+            snapshot?.verification === 'checking' ||
+            snapshot?.transport === 'disconnected' ||
+            snapshot?.transport === 'connecting'
+          ? 'connecting'
           : runtimeControlHealth(remoteControl)
   setHost(hosts, {
     id: hostId,
@@ -273,7 +263,9 @@ export function buildExecutionHostRegistry(args: {
   }
   if (args.hostSource !== 'configured-only') {
     for (const repo of args.repos) {
-      const targetId = normalizeHostPart(repo.connectionId)
+      // Why the host, not `connectionId`: a paired-server repo's `connectionId` is the server's
+      // own SSH target, which this client cannot dial.
+      const targetId = getSshTargetIdForExecutionHost(getRepoExecutionHostId(repo))
       if (targetId && !isRuntimeOwnedSshTargetId(targetId)) {
         sshTargetIds.add(targetId)
       }
@@ -287,17 +279,26 @@ export function buildExecutionHostRegistry(args: {
       kind: 'ssh',
       label: args.sshTargetLabels?.get(targetId) || targetId,
       detail: 'SSH',
-      health: sshHealth(state),
+      health: getSshConnectionHealth(state?.status),
       connectionStatus: state?.status
     })
   }
+
+  annotateManagedOrcadExecutionHosts({
+    hosts,
+    runtimeEnvironments: args.runtimeEnvironments ?? [],
+    sshConnectionStates: args.sshConnectionStates
+  })
 
   const overrides = args.hostLabelOverrides
   if (!overrides || overrides.size === 0) {
     return [...hosts.values()]
   }
   return [...hosts.values()].map((host) => {
-    const label = overrides.get(host.id)
+    // Why the alias fallback: a rename saved on the merged-away id still names the merged row.
+    const label =
+      overrides.get(host.id) ??
+      host.aliasHostIds?.map((aliasHostId) => overrides.get(aliasHostId)).find(Boolean)
     return label ? { ...host, label } : host
   })
 }

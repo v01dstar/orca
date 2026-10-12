@@ -1,41 +1,45 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../shared/repo-types'
 import { tuiAgentToAgentKind } from '../../shared/agent-kind'
+import { getDefaultSettings } from '../../shared/constants'
+import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
 
 const mocks = vi.hoisted(() => ({
-  detectRemoteAgents: vi.fn(),
   detectInstalledAgentsWithShellPathHydration: vi.fn()
 }))
 
 vi.mock('../preflight/agent-detection', () => ({
-  detectRemoteAgents: mocks.detectRemoteAgents,
   detectInstalledAgentsWithShellPathHydration: mocks.detectInstalledAgentsWithShellPathHydration
 }))
 
 import {
   buildWorktreeStartupForAgent,
-  buildWorktreeStartupForDraft
+  buildWorktreeStartupForDraft,
+  resolveWorktreeCreateAgentStartup,
+  resolveWorktreeStartupDraftAgent
 } from './runtime-worktree-agent-startup'
 
 function makeRepo(fields: Partial<Repo>): Repo {
   return {
     id: 'repo-1',
-    name: 'repo',
+    displayName: 'repo',
+    badgeColor: '#737373',
+    addedAt: 0,
     path: '/srv/repo',
     connectionId: null,
     executionHostId: null,
     ...fields
-  } as Repo
+  }
 }
 
 const settings = {
+  ...getDefaultSettings('/tmp'),
   agentCmdOverrides: {},
   agentDefaultArgs: {},
   agentDefaultEnv: {},
   disabledTuiAgents: [],
-  defaultTuiAgent: undefined,
-  terminalWindowsShell: null
-} as never
+  defaultTuiAgent: null
+}
 
 /** The launched CLI name is the whole decision: `orca` is the relay shim, `orca-ide` is local. */
 function launchCliNameFor(repo: Repo): string {
@@ -143,10 +147,33 @@ describe('buildWorktreeStartupForAgent prompt carry', () => {
   })
 })
 
+// `worktree.create` through the launch executor passes no prompt for a blank one; the create must
+// launch the agent exactly as it did when handed the blank text itself.
+describe('buildWorktreeStartupForAgent blank prompt', () => {
+  it.each(['claude', 'aider'] as const)(
+    'launches %s bare for an absent or blank prompt',
+    (agent) => {
+      const build = (prompt?: string) =>
+        buildWorktreeStartupForAgent({
+          repo: makeRepo({}),
+          settings,
+          agent,
+          ...(prompt !== undefined ? { prompt } : {}),
+          getLaunchPlatform: () => 'linux',
+          toSessionOptions: () => undefined
+        })
+
+      const bare = build()
+      expect(bare.followup).toBeUndefined()
+      expect(build('')).toEqual(bare)
+      expect(build('  \n ')).toEqual(bare)
+    }
+  )
+})
+
 describe('buildWorktreeStartupForDraft agent detection', () => {
-  it('probes the SSH host named only by executionHostId instead of this client', async () => {
-    mocks.detectRemoteAgents.mockResolvedValueOnce(['claude'])
-    mocks.detectInstalledAgentsWithShellPathHydration.mockResolvedValue([])
+  it('never probes this client for an SSH host named only by executionHostId', async () => {
+    mocks.detectInstalledAgentsWithShellPathHydration.mockResolvedValue(['claude'])
 
     const result = await buildWorktreeStartupForDraft({
       repo: makeRepo({ executionHostId: 'ssh:openclaw' }),
@@ -155,13 +182,11 @@ describe('buildWorktreeStartupForDraft agent detection', () => {
       getLaunchPlatform: () => 'linux'
     })
 
-    expect(mocks.detectRemoteAgents).toHaveBeenCalledWith({ connectionId: 'openclaw' })
     expect(mocks.detectInstalledAgentsWithShellPathHydration).not.toHaveBeenCalled()
-    expect(result?.agent).toBe('claude')
+    expect(result).toBeNull()
   })
 
   it('probes this client for a local row carrying a stale connection', async () => {
-    mocks.detectRemoteAgents.mockClear()
     mocks.detectInstalledAgentsWithShellPathHydration.mockResolvedValueOnce(['claude'])
 
     const result = await buildWorktreeStartupForDraft({
@@ -171,7 +196,6 @@ describe('buildWorktreeStartupForDraft agent detection', () => {
       getLaunchPlatform: () => 'linux'
     })
 
-    expect(mocks.detectRemoteAgents).not.toHaveBeenCalled()
     expect(result?.agent).toBe('claude')
   })
 
@@ -202,4 +226,123 @@ describe('buildWorktreeStartupForDraft agent detection', () => {
       })
     }
   )
+})
+
+describe('buildWorktreeStartupForAgent extra agent args', () => {
+  it("merges an automation's extras over the host defaults", () => {
+    const result = buildWorktreeStartupForAgent({
+      repo: makeRepo({}),
+      settings: {
+        ...settings,
+        agentDefaultArgs: { claude: '--dangerously-skip-permissions --model sonnet' }
+      },
+      agent: 'claude',
+      prompt: 'go',
+      extraAgentArgs: '--model opus',
+      getLaunchPlatform: () => 'linux',
+      toSessionOptions: () => undefined
+    })
+
+    expect(result.startup.command).toBe(
+      "claude '--dangerously-skip-permissions' '--model' 'opus' 'go'"
+    )
+  })
+
+  it('refuses invalid extras before any terminal exists', () => {
+    expect(() =>
+      buildWorktreeStartupForAgent({
+        repo: makeRepo({}),
+        settings,
+        agent: 'claude',
+        prompt: 'go',
+        extraAgentArgs: '--settings evil.json',
+        getLaunchPlatform: () => 'linux',
+        toSessionOptions: () => undefined
+      })
+    ).toThrow('"--settings"')
+  })
+
+  it('threads worktree-create extras into the startup build', () => {
+    const build = vi.fn(() => ({
+      agent: 'claude' as const,
+      startup: { command: 'claude' }
+    }))
+    const createArgs: RuntimeManagedWorktreeCreateArgs = {
+      repoSelector: 'repo-1',
+      name: 'Review',
+      startupAgent: 'claude',
+      startupPrompt: 'go',
+      startupExtraAgentArgs: '--effort high'
+    }
+    resolveWorktreeCreateAgentStartup(createArgs, build)
+
+    expect(build).toHaveBeenCalledWith('claude', 'go', undefined, {
+      extraAgentArgs: '--effort high'
+    })
+  })
+})
+
+describe('resolveWorktreeStartupDraftAgent', () => {
+  beforeEach(() => {
+    mocks.detectInstalledAgentsWithShellPathHydration.mockReset()
+    mocks.detectInstalledAgentsWithShellPathHydration.mockResolvedValue([])
+  })
+  afterEach(() => {
+    mocks.detectInstalledAgentsWithShellPathHydration.mockReset()
+  })
+
+  const resolve = (
+    fields: Partial<Parameters<typeof resolveWorktreeStartupDraftAgent>[0]['settings']>,
+    requestedAgent?: 'claude' | 'codex',
+    repo = makeRepo({})
+  ) =>
+    resolveWorktreeStartupDraftAgent({
+      repo,
+      settings: { ...settings, ...fields },
+      ...(requestedAgent ? { requestedAgent } : {})
+    })
+
+  it('returns an enabled requested agent without detecting', async () => {
+    await expect(resolve({ defaultTuiAgent: 'claude' }, 'codex')).resolves.toBe('codex')
+    expect(mocks.detectInstalledAgentsWithShellPathHydration).not.toHaveBeenCalled()
+  })
+
+  it('returns the default when nothing was requested', async () => {
+    await expect(resolve({ defaultTuiAgent: 'claude' })).resolves.toBe('claude')
+    expect(mocks.detectInstalledAgentsWithShellPathHydration).not.toHaveBeenCalled()
+  })
+
+  // The requested agent replaces the default rather than preceding it, so a disabled request goes
+  // straight to detection — the order the create has always used.
+  it('detects instead of using the default when the requested agent is disabled', async () => {
+    mocks.detectInstalledAgentsWithShellPathHydration.mockResolvedValue(['codex', 'gemini'])
+
+    await expect(
+      resolve({ defaultTuiAgent: 'claude', disabledTuiAgents: ['codex'] }, 'codex')
+    ).resolves.toBe('gemini')
+    expect(mocks.detectInstalledAgentsWithShellPathHydration).toHaveBeenCalledTimes(1)
+  })
+
+  it('starts no agent when the default is blank', async () => {
+    await expect(resolve({ defaultTuiAgent: 'blank' })).resolves.toBeNull()
+    expect(mocks.detectInstalledAgentsWithShellPathHydration).not.toHaveBeenCalled()
+  })
+
+  it('detects an enabled agent on this host when nothing usable was named', async () => {
+    mocks.detectInstalledAgentsWithShellPathHydration.mockResolvedValue(['codex', 'claude'])
+
+    await expect(resolve({ disabledTuiAgents: ['codex'] })).resolves.toBe('claude')
+  })
+
+  // Why: the SSH host runs the agent; an unserved host must never be answered by this client.
+  it('starts no agent on an unserved SSH host rather than detecting locally', async () => {
+    mocks.detectInstalledAgentsWithShellPathHydration.mockResolvedValue(['codex'])
+
+    await expect(resolve({}, undefined, makeRepo({ connectionId: 'ssh-1' }))).resolves.toBeNull()
+    expect(mocks.detectInstalledAgentsWithShellPathHydration).not.toHaveBeenCalled()
+  })
+
+  it('starts no agent when detection finds none', async () => {
+    await expect(resolve({})).resolves.toBeNull()
+  })
 })

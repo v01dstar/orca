@@ -26,12 +26,14 @@ import {
 } from './ai-vault-session-resume'
 import { useAiVaultSessionLaunchActions } from './ai-vault-session-launch-actions'
 import type { AiVaultResumeInChatEligibility } from './ai-vault-session-resume-in-chat'
-import { resolveAiVaultSessionResumeInChatForWorkspace } from './ai-vault-session-resume-in-chat-workspace'
+import { resolveAiVaultHistoryRowResume } from './ai-vault-session-resume-in-chat-workspace'
 import {
+  useAiVaultSessionOwnerWorkspaces,
   useAiVaultSessionWorktreeMap,
   withAiVaultCurrentWorktreeStatus
 } from './ai-vault-session-worktree'
 import { openAiVaultSessionLogInOrca } from './ai-vault-session-log-open'
+import { revealAiVaultSessionPath } from './ai-vault-session-path-actions'
 import { useAiVaultOriginalPaneActions } from './ai-vault-original-pane-actions'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import { translate } from '@/i18n/i18n'
@@ -184,10 +186,12 @@ export default function AiVaultPanel(): React.JSX.Element {
       }),
     [allWorktrees, projectHostSetupProjection, repos, sessions]
   )
+  // Folder workspaces own their sessions by cwd too, so they resume and jump like a worktree.
+  const ownerWorkspaces = useAiVaultSessionOwnerWorkspaces(allWorktrees, resumeTargetState)
   const sessionWorktreeById = useAiVaultSessionWorktreeMap({
     sessions,
     repos,
-    worktrees: allWorktrees
+    worktrees: ownerWorkspaces
   })
   const effectiveActiveWorktreeId = activeWorktreeId ?? activeWorktree?.id ?? null
   // `current` is stamped per row at read time so the map above stays cached.
@@ -233,31 +237,31 @@ export default function AiVaultPanel(): React.JSX.Element {
     )
   }, [])
 
+  const getSessionRowResumeArgs = useCallback(
+    (session: AiVaultSession) => ({
+      session,
+      worktreeInfo: getSessionWorktreeInfo(session),
+      activeWorktreeId: effectiveActiveWorktreeId,
+      worktrees: ownerWorkspaces,
+      repos,
+      targetState: resumeTargetState
+    }),
+    [effectiveActiveWorktreeId, getSessionWorktreeInfo, ownerWorkspaces, repos, resumeTargetState]
+  )
   const getSessionResumeState = useCallback(
     (session: AiVaultSession) =>
-      resolveAiVaultHistorySessionResumeState({
-        session,
-        worktreeInfo: getSessionWorktreeInfo(session),
-        activeWorktreeId: effectiveActiveWorktreeId,
-        worktrees: allWorktrees,
-        repos,
-        targetState: resumeTargetState
-      }),
-    [allWorktrees, effectiveActiveWorktreeId, getSessionWorktreeInfo, repos, resumeTargetState]
+      resolveAiVaultHistorySessionResumeState(getSessionRowResumeArgs(session)),
+    [getSessionRowResumeArgs]
   )
 
   const getSessionResumeActions = useCallback(
     (session: AiVaultSession) =>
       resolveAiVaultSessionResumeActions({
+        ...getSessionRowResumeArgs(session),
         sessionFilePath: session.filePath,
-        sessionExecutionHostId: session.executionHostId,
-        worktreeInfo: getSessionWorktreeInfo(session),
-        activeWorktreeId: effectiveActiveWorktreeId,
-        worktrees: allWorktrees,
-        repos,
-        targetState: resumeTargetState
+        sessionExecutionHostId: session.executionHostId
       }),
-    [allWorktrees, effectiveActiveWorktreeId, getSessionWorktreeInfo, repos, resumeTargetState]
+    [getSessionRowResumeArgs]
   )
 
   // Resuming into a chat asks a different question from resuming into a terminal: not "can this
@@ -266,14 +270,9 @@ export default function AiVaultPanel(): React.JSX.Element {
   // Claude looks its transcript up under a directory derived from the launch cwd.
   const getSessionResumeInChat = useCallback(
     (session: AiVaultSession): AiVaultResumeInChatEligibility =>
-      resolveAiVaultSessionResumeInChatForWorkspace({
-        session,
-        resumeState: getSessionResumeState(session),
-        activeWorkspaceId: effectiveActiveWorktreeId,
-        targetState: resumeTargetState,
-        settings
-      }),
-    [effectiveActiveWorktreeId, getSessionResumeState, resumeTargetState, settings]
+      resolveAiVaultHistoryRowResume({ ...getSessionRowResumeArgs(session), settings })
+        .resumeInChat,
+    [getSessionRowResumeArgs, settings]
   )
 
   // Settings asks for "everything, ready to type".
@@ -376,6 +375,7 @@ export default function AiVaultPanel(): React.JSX.Element {
             getSessionResumeInChat={getSessionResumeInChat}
             onContinueInNewSession={launchActions.handleContinueInNewSession}
             onResumeInNewChat={launchActions.handleResumeInNewChat}
+            onResumeInNewCli={launchActions.handleResumeInNewCli}
             onCopyResume={(session, worktreeId) =>
               void launchActions.copyResumeCommand(session, worktreeId)
             }
@@ -392,12 +392,8 @@ export default function AiVaultPanel(): React.JSX.Element {
               )
             }
             onOpenLog={(session) => void openAiVaultSessionLogInOrca(session)}
-            onRevealLog={(session) => void window.api.shell.openPath(session.filePath)}
-            onOpenCwd={(session) => {
-              if (session.cwd) {
-                void window.api.shell.openPath(session.cwd)
-              }
-            }}
+            onRevealLog={(session) => void revealAiVaultSessionPath(session, session.filePath)}
+            onOpenCwd={(session) => void revealAiVaultSessionPath(session, session.cwd)}
             onRequestDelete={(session) => void requestDelete(session)}
           />
         )}

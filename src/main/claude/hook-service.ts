@@ -24,6 +24,7 @@ import {
 
 export { getManagedScript }
 import { getManagedStatusLineScript } from './statusline-script'
+import { refuseProfileAtDefaultHome } from './claude-profile-hook-target'
 import {
   applyManagedHooks,
   applyManagedStatusLine,
@@ -31,11 +32,11 @@ import {
   getManagedScriptFileName,
   getConfigPath,
   getManagedCommand,
-  getManagedLifecycleHook,
+  getManagedEventHook,
   getManagedScriptPath,
   getPosixManagedScriptFileName,
   getRemoteConfigPath,
-  getRemoteManagedCommand,
+  getRemoteManagedEventCommand,
   getStatusLineInstallMarkerPath,
   getStatusLineScriptFileName,
   getStatusLineScriptPath,
@@ -62,6 +63,11 @@ type ClaudeHookServiceOptions = {
 
 type ClaudeHookInstallOptions = {
   claudeVersion?: string
+}
+
+type ClaudeHookTargetOptions = ClaudeHookInstallOptions & {
+  /** An account profile on this host; omitted for the default home. */
+  configDir?: string
 }
 
 const DEFAULT_CLAUDE_HOOK_SERVICE_OPTIONS: ClaudeHookServiceOptions = {
@@ -97,8 +103,12 @@ export class ClaudeHookService {
       : (this.options.hookPlan ?? OPENCLAUDE_MANAGED_HOOK_PLAN)
   }
 
-  getStatus(options: ClaudeHookInstallOptions = {}): AgentHookInstallStatus {
-    const configPath = getConfigPath(this.options.settings)
+  getStatus(options: ClaudeHookTargetOptions = {}): AgentHookInstallStatus {
+    const refused = refuseProfileAtDefaultHome(this.options, options.configDir)
+    if (refused) {
+      return refused
+    }
+    const configPath = getConfigPath(this.options.settings, options.configDir)
     const scriptPath = getManagedScriptPath(this.options.settings)
     const config = readHooksJson(configPath)
     if (!config) {
@@ -112,10 +122,10 @@ export class ClaudeHookService {
     }
 
     // Why: report partial registration instead of a false installed state.
-    const expectedHook = getManagedLifecycleHook(scriptPath, this.options.settings)
     const missing: string[] = []
     let presentCount = 0
     for (const event of this.managedHookPlan(options).install) {
+      const expectedHook = getManagedEventHook(event.eventName, scriptPath, this.options.settings)
       const definitions = Array.isArray(config.hooks?.[event.eventName])
         ? config.hooks![event.eventName]!
         : []
@@ -158,8 +168,12 @@ export class ClaudeHookService {
     )
   }
 
-  install(options: ClaudeHookInstallOptions = {}): AgentHookInstallStatus {
-    const configPath = getConfigPath(this.options.settings)
+  install(options: ClaudeHookTargetOptions = {}): AgentHookInstallStatus {
+    const refused = refuseProfileAtDefaultHome(this.options, options.configDir)
+    if (refused) {
+      return refused
+    }
+    const configPath = getConfigPath(this.options.settings, options.configDir)
     const scriptPath = getManagedScriptPath(this.options.settings)
     const config = readHooksJson(configPath)
     if (!config) {
@@ -172,11 +186,10 @@ export class ClaudeHookService {
       }
     }
 
-    const hook = getManagedLifecycleHook(scriptPath, this.options.settings)
     const plan = this.managedHookPlan(options)
     let nextConfig = applyManagedHooks(
       config,
-      hook,
+      (eventName) => getManagedEventHook(eventName, scriptPath, this.options.settings),
       getManagedScriptFileName(this.options.settings),
       plan
     )
@@ -186,9 +199,10 @@ export class ClaudeHookService {
     } else {
       writeManagedScript(scriptPath, payload)
     }
-    if (plan.statusLine === 'install') {
+    // Why: a profile's statusLine arrives with the settings copy from the default home.
+    if (options.configDir === undefined && plan.statusLine === 'install') {
       nextConfig = this.installManagedStatusLine(nextConfig)
-    } else if (plan.statusLine === 'retire') {
+    } else if (options.configDir === undefined && plan.statusLine === 'retire') {
       nextConfig = this.retireManagedStatusLine(nextConfig)
     }
     writeHooksJson(configPath, nextConfig)
@@ -260,10 +274,10 @@ export class ClaudeHookService {
       }
 
       // Why: settings resolve HOME at runtime while SFTP still targets the discovered remote home.
-      const hook = buildManagedCommandHook(getRemoteManagedCommand(remoteScriptPath))
       const nextConfig = applyManagedHooks(
         config,
-        hook,
+        (eventName) =>
+          buildManagedCommandHook(getRemoteManagedEventCommand(eventName, remoteScriptPath)),
         remoteScriptFileName,
         this.managedHookPlan(options)
       )

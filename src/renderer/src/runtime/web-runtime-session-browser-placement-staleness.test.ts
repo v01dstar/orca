@@ -14,9 +14,9 @@ import {
   WORKTREE_ID,
   makeSnapshot,
   resetBrowserTabCreateEnvironment,
-  stubBrowserTabCreateEnvironment,
-  webRuntimeSessionWindowApi
+  stubBrowserTabCreateEnvironment
 } from './web-runtime-session-test-harness'
+import { stubBrowserCreateRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
 
 const mocks = vi.hoisted(() => ({
   getState: vi.fn(),
@@ -126,7 +126,7 @@ describe('browser placement against a stale capability cache', () => {
       .fn()
       .mockResolvedValue({ kind: 'client', browserHostClientId: 'browser-client-a' })
     const runtimeCall = successfulCreateCalls()
-    vi.stubGlobal('window', webRuntimeSessionWindowApi(runtimeCall, preparePlacement))
+    stubBrowserCreateRuntimeEnvironmentBridge(runtimeCall, preparePlacement)
 
     await expect(createWebRuntimeSessionBrowserTab({ worktreeId: WORKTREE_ID })).resolves.toBe(true)
 
@@ -145,7 +145,7 @@ describe('browser placement against a stale capability cache', () => {
       .fn()
       .mockResolvedValue({ kind: 'client', browserHostClientId: 'browser-client-a' })
     const runtimeCall = successfulCreateCalls()
-    vi.stubGlobal('window', webRuntimeSessionWindowApi(runtimeCall, preparePlacement))
+    stubBrowserCreateRuntimeEnvironmentBridge(runtimeCall, preparePlacement)
 
     await createWebRuntimeSessionBrowserTab({ worktreeId: WORKTREE_ID })
 
@@ -166,7 +166,7 @@ describe('browser placement against a stale capability cache', () => {
   it('clears the staged client-hosted mark when the live placement answers server', async () => {
     cacheCapabilities(CLIENT_HOSTING_CAPABILITIES)
     const preparePlacement = vi.fn().mockResolvedValue({ kind: 'server' })
-    vi.stubGlobal('window', webRuntimeSessionWindowApi(successfulCreateCalls(), preparePlacement))
+    stubBrowserCreateRuntimeEnvironmentBridge(successfulCreateCalls(), preparePlacement)
 
     await createWebRuntimeSessionBrowserTab({ worktreeId: WORKTREE_ID })
 
@@ -178,7 +178,7 @@ describe('browser placement against a stale capability cache', () => {
     cacheCapabilities(PRE_UPGRADE_CAPABILITIES)
     const preparePlacement = vi.fn().mockResolvedValue({ kind: 'server' })
     const runtimeCall = successfulCreateCalls()
-    vi.stubGlobal('window', webRuntimeSessionWindowApi(runtimeCall, preparePlacement))
+    stubBrowserCreateRuntimeEnvironmentBridge(runtimeCall, preparePlacement)
 
     await expect(createWebRuntimeSessionBrowserTab({ worktreeId: WORKTREE_ID })).resolves.toBe(true)
 
@@ -189,7 +189,7 @@ describe('browser placement against a stale capability cache', () => {
   it('still skips the placement check for an explicit server request', async () => {
     cacheCapabilities(PRE_UPGRADE_CAPABILITIES)
     const preparePlacement = vi.fn()
-    vi.stubGlobal('window', webRuntimeSessionWindowApi(successfulCreateCalls(), preparePlacement))
+    stubBrowserCreateRuntimeEnvironmentBridge(successfulCreateCalls(), preparePlacement)
 
     await expect(
       createWebRuntimeSessionBrowserTab({ worktreeId: WORKTREE_ID, placementPreference: 'server' })

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createWebRuntimeSessionBrowserTab } from './web-runtime-session'
+import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
 
 const ENVIRONMENT_ID = 'runtime-1'
 const WORKTREE_ID = 'repo::/worktree'
@@ -46,9 +47,7 @@ describe('paired browser capability cleanup', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
-    vi.stubGlobal('window', {
-      api: { runtimeEnvironments: { call: mocks.runtimeCall } }
-    })
+    stubRuntimeEnvironmentBridge({ call: mocks.runtimeCall })
   })
 
   it.each([

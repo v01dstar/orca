@@ -1,6 +1,7 @@
+import { showNestedWorktreePreservedBranchesToast } from '@/components/sidebar/nested-worktree-preserved-branches-toast'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { RemoveWorktreeResult } from '../../../../../../shared/worktree/create-types'
-import { callRuntimeRpc, type getActiveRuntimeTarget } from '../../../../runtime/runtime-rpc-client'
+import { callRuntimeRpc, type RuntimeClientTarget } from '../../../../runtime/runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from '../../../../runtime/runtime-worktree-selector'
 import type { RemoveWorktreeOptions } from '../../worktree-removal-options'
 import type { WorktreeSliceGet } from '../listing/worktree-slice-types'
@@ -23,13 +24,15 @@ export async function dispatchWorktreeRemoval(args: {
   force: boolean | undefined
   skipArchive: boolean
   get: WorktreeSliceGet
-  target: ReturnType<typeof getActiveRuntimeTarget>
+  target: RuntimeClientTarget
   options: RemoveWorktreeOptions | undefined
   /** Re-checks mid-flight ownership immediately before the destructive call. */
   assertCurrent: () => void
 }): Promise<RemoveWorktreeResult> {
   try {
-    return await requestWorktreeRemoval(args)
+    const result = await requestWorktreeRemoval(args)
+    showNestedWorktreePreservedBranchesToast(result?.nestedPreservedBranches)
+    return result
   } catch (error) {
     if (args.options?.mode === 'forget-local' || !isWorktreeRemovalReplyLost(error)) {
       throw error
@@ -61,11 +64,19 @@ async function requestWorktreeRemoval(
       worktreeId,
       hostId,
       force,
+      ...(options?.approvedNestedWorktrees
+        ? { approvedNestedWorktrees: options.approvedNestedWorktrees }
+        : {}),
       allowUnverifiedPtyStop: options?.allowUnverifiedPtyStop === true,
       allowFailedArchiveHook: options?.allowFailedArchiveHook === true,
       skipArchive,
       ...snapshotPruneBatch
     })
+  }
+  if (options?.approvedNestedWorktrees) {
+    throw new Error(
+      'Nested worktree deletion is not supported by this runtime. Delete its children individually first.'
+    )
   }
   const effectiveHostId =
     options?.sameIdSurvivingHostId != null ? hostId : qualifyRuntimeCallHost(target, hostId)
@@ -91,7 +102,7 @@ async function requestWorktreeRemoval(
 }
 
 function qualifyRuntimeCallHost(
-  target: ReturnType<typeof getActiveRuntimeTarget>,
+  target: RuntimeClientTarget,
   hostId: ExecutionHostId | undefined
 ): ExecutionHostId | undefined {
   const parsedHost = parseExecutionHostId(hostId)

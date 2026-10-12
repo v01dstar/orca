@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { setWebRuntimeTabProps } from './web-runtime-session'
 import { resetWebSessionCloseIntentForTests } from './web-session-close-intent'
 import { ENVIRONMENT_ID, WORKTREE_ID } from './web-runtime-session-test-harness'
+import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
 
 const mocks = vi.hoisted(() => ({
   getState: vi.fn(),
@@ -76,7 +77,7 @@ describe('setWebRuntimeTabProps', () => {
     mocks.getRuntimeEnvironmentIdForWorktree.mockReturnValue(ENVIRONMENT_ID)
     mocks.getState.mockReturnValue({})
     const runtimeCall = vi.fn().mockResolvedValue({ id: 'p', ok: true, result: { updated: true } })
-    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall })
 
     expect(
       setWebRuntimeTabProps({
@@ -108,7 +109,7 @@ describe('setWebRuntimeTabProps', () => {
         args.tabId === 'local-browser-unified' ? 'host-browser-unified' : null
     )
     const runtimeCall = vi.fn().mockResolvedValue({ id: 'p', ok: true, result: { updated: true } })
-    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall })
 
     expect(
       setWebRuntimeTabProps({
@@ -136,7 +137,7 @@ describe('setWebRuntimeTabProps', () => {
     mocks.getRuntimeEnvironmentIdForWorktree.mockReturnValue(null)
     mocks.getState.mockReturnValue({})
     const runtimeCall = vi.fn()
-    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall })
 
     expect(
       setWebRuntimeTabProps({ worktreeId: WORKTREE_ID, tabId: 'local-tab', color: '#fff' })

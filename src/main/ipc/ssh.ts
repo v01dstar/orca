@@ -1,37 +1,17 @@
-import {
-  AiVaultSearchRequestSchema,
-  AiVaultSearchStatusRequestSchema
-} from '../../shared/ai-vault-search-contract'
 import { ipcMain, type BrowserWindow } from 'electron'
 import type { Store } from '../persistence'
 import { SshConnectionStore } from '../ssh/ssh-connection-store'
 import { SshConnectionManager } from '../ssh/ssh-connection-manager'
-import type { SshRelayAiVaultHostInfo } from '../ssh/ssh-relay-session'
-import type {
-  SshAiVaultRelayListParams,
-  SshAiVaultRelayTitleParams
-} from '../../shared/ssh-ai-vault-relay'
 import { SshPortForwardManager } from '../ssh/ssh-port-forward'
-import { isRuntimeOwnedSshTargetId } from '../../shared/execution-host'
 import { quitTeardownStartGate } from '../quit-teardown-start-gate'
 import {
   getSshTargetRegistryStore,
   setSshConnectionManagerResolver,
+  setSshTargetMutations,
   setSshTargetRegistryHandlers,
   setSshTargetRegistryStore
 } from '../ssh/ssh-target-registry'
 
-// Why re-exported: the registry moved to ../ssh/ssh-target-registry so the runtime can
-// read it without pulling ipcMain in, but many existing importers reference these from
-// here. Re-exporting keeps them working without a repo-wide rename.
-export {
-  connectRegisteredSshTarget,
-  getActiveMultiplexer,
-  getRegisteredSshState,
-  getSshConnectionManager,
-  listRegisteredRemovedSshTargetLabels,
-  listRegisteredSshTargets
-} from '../ssh/ssh-target-registry'
 import { registerSshBrowseHandler } from './ssh-browse'
 import { registerCredentialHandler } from './ssh-passphrase'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
@@ -40,16 +20,10 @@ import {
   resetSshConnectionGenerations
 } from '../ssh/ssh-connection-generation'
 import { resetSshProviderAuthorities } from '../ssh/ssh-provider-authority'
-import { activeSessions } from './ssh-active-relay-sessions'
-import {
-  registerAdvertisedUrlRefresh,
-  unregisterAdvertisedUrlRefresh
-} from './ssh-advertised-url-refresh'
+import { installManagedOrcadStartStatus } from './runtime-environment-managed-tunnel'
 import {
   connectInFlight,
   credentialRequestedForTarget,
-  pendingTransportReconnects,
-  resetRelayInFlight,
   testConnectionProbes,
   testingTargets
 } from './ssh-connect-attempt-registry'
@@ -71,12 +45,14 @@ import {
 } from './ssh-ipc-context'
 import { registerSshPortForwardHandlers } from './ssh-port-forward-handlers'
 import { persistPortForwardsWithUnrestored } from './ssh-port-forward-persistence'
-import { clearRelayLostBackoff, relayLostBackoff } from './ssh-relay-lost-backoff'
-import { refreshActiveRelaySessions } from './ssh-relay-session-callbacks'
-import { broadcastPortForwards, relayStateOverrides } from './ssh-renderer-broadcast'
+import { broadcastPortForwards } from './ssh-renderer-broadcast'
 import { resetSshShutdownDrain } from './ssh-shutdown-drain'
 import { registerSshTargetCrudHandlers } from './ssh-target-crud-handlers'
 import { targetLifecycleInFlight } from './ssh-target-lifecycle-queue'
+import { disposeOrcadManagedTunnels } from '../ssh/orcad-managed-tunnel'
+import { reconcileManagedOrcadSshTargets } from '../ssh/orcad-retained-source'
+import { installOrcadMigrationScrollbackRetention } from '../ssh/orcad-migration-scrollback-retention-wiring'
+import { getAppEnvironment } from '../../shared/app-environment'
 
 const SSH_IPC_CHANNELS = [
   'ssh:listTargets',
@@ -89,85 +65,16 @@ const SSH_IPC_CHANNELS = [
   'ssh:resolveConfigHost',
   'ssh:connect',
   'ssh:disconnect',
-  'ssh:terminateSessions',
-  'ssh:resetRelay',
   'ssh:getState',
   'ssh:needsPassphrasePrompt',
   'ssh:testConnection',
+  'ssh:endOldRelayTerminals',
   'ssh:addPortForward',
   'ssh:updatePortForward',
   'ssh:removePortForward',
   'ssh:listPortForwards',
   'ssh:listDetectedPorts'
 ] as const
-
-export function getActiveSshAiVaultHostInfo(targetId: string): SshRelayAiVaultHostInfo | null {
-  if (isRuntimeOwnedSshTargetId(targetId)) {
-    return null
-  }
-  return activeSessions.get(targetId)?.getAiVaultHostInfo() ?? null
-}
-
-export function getActiveSshAiVaultHostInfos(): SshRelayAiVaultHostInfo[] {
-  return [...activeSessions.values()].flatMap((session) => {
-    if (isRuntimeOwnedSshTargetId(session.targetId)) {
-      return []
-    }
-    const info = session.getAiVaultHostInfo()
-    return info ? [info] : []
-  })
-}
-
-export async function requestActiveSshSessionSearch(
-  targetId: string,
-  method: string,
-  params: unknown
-): Promise<unknown> {
-  if (isRuntimeOwnedSshTargetId(targetId)) {
-    throw new Error('SSH target belongs to another runtime')
-  }
-  const session = activeSessions.get(targetId)
-  if (!session) {
-    throw new Error('SSH relay is not ready')
-  }
-  if (method === 'aiVault.searchSessions') {
-    return session.requestSessionSearch(method, AiVaultSearchRequestSchema.parse(params))
-  }
-  if (method === 'aiVault.searchStatus') {
-    return session.requestSessionSearch(method, AiVaultSearchStatusRequestSchema.parse(params))
-  }
-  throw new Error('Unknown session search method')
-}
-
-export async function requestActiveSshAiVaultSessionList(
-  targetId: string,
-  params: SshAiVaultRelayListParams,
-  options: { signal?: AbortSignal; timeoutMs?: number } = {}
-): Promise<unknown> {
-  if (isRuntimeOwnedSshTargetId(targetId)) {
-    return null
-  }
-  const session = activeSessions.get(targetId)
-  if (!session) {
-    throw new Error('SSH relay is not ready')
-  }
-  return session.requestAiVaultSessionList(params, options)
-}
-
-export async function requestActiveSshAiVaultSessionTitles(
-  targetId: string,
-  params: SshAiVaultRelayTitleParams,
-  options: { signal?: AbortSignal; timeoutMs?: number } = {}
-): Promise<unknown> {
-  if (isRuntimeOwnedSshTargetId(targetId)) {
-    return null
-  }
-  const session = activeSessions.get(targetId)
-  if (!session) {
-    throw new Error('SSH relay is not ready')
-  }
-  return session.requestAiVaultSessionTitles(params, options)
-}
 
 export function registerSshHandlers(
   store: Store,
@@ -184,7 +91,9 @@ export function registerSshHandlers(
   setCurrentRuntime(runtime)
   setSshTargetRegistryStore(new SshConnectionStore(store))
   setPersistedStore(store)
-  registerAdvertisedUrlRefresh(getCurrentMainWindow)
+  reconcileManagedOrcadSshTargets(getAppEnvironment().getPath('userData'), store)
+  installOrcadMigrationScrollbackRetention(getAppEnvironment().getPath('userData'), store)
+  installManagedOrcadStartStatus()
 
   registerCredentialHandler()
 
@@ -208,8 +117,7 @@ export function registerSshHandlers(
       broadcastPortForwards(getCurrentMainWindow, entry.connectionId)
     }
   })
-  refreshActiveRelaySessions()
-  registerPowerMonitorReconnect()
+  registerPowerMonitorReconnect(() => getAppEnvironment().getPath('userData'))
   registerSshBrowseHandler(() => connectionManager)
   setSshConnectionManagerResolver(() => connectionManager)
 
@@ -224,28 +132,16 @@ export function registerSshHandlers(
 }
 
 export async function resetSshHandlerStateForTests(): Promise<void> {
-  unregisterAdvertisedUrlRefresh()
   unregisterPowerMonitorReconnect()
   for (const ch of SSH_IPC_CHANNELS) {
     ipcMain.removeHandler(ch)
   }
   ipcMain.removeHandler('ssh:submitCredential')
 
-  // Why: allSettled — a rejected disposal write must not abort the rest of the reset and leak state into the next test.
-  await Promise.allSettled(
-    [...activeSessions.values()].map((session) => session.disposeAndPersist())
-  )
-  activeSessions.clear()
-  for (const targetId of relayLostBackoff.keys()) {
-    clearRelayLostBackoff(targetId)
-  }
-  relayStateOverrides.clear()
   connectInFlight.clear()
   targetLifecycleInFlight.clear()
-  pendingTransportReconnects.clear()
   resetSshConnectionGenerations()
   resetSshProviderAuthorities()
-  resetRelayInFlight.clear()
   testingTargets.clear()
   testConnectionProbes.clear()
   credentialRequestedForTarget.clear()
@@ -253,6 +149,7 @@ export async function resetSshHandlerStateForTests(): Promise<void> {
   resetSshShutdownDrain()
 
   await connectionManager?.disconnectAll()
+  disposeOrcadManagedTunnels()
   portForwardManager?.dispose()
   setConnectionManager(null)
   setSshConnectionManagerResolver(null)
@@ -260,6 +157,7 @@ export async function resetSshHandlerStateForTests(): Promise<void> {
   setSshTargetRegistryStore(null)
   setPersistedStore(null)
   setSshTargetRegistryHandlers({ connect: null, getState: null })
+  setSshTargetMutations(null)
   setCurrentGetMainWindow(() => null)
   setCurrentRuntime(undefined)
 }

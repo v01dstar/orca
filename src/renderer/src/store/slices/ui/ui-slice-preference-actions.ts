@@ -67,9 +67,6 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
       const normalized = normalizeExecutionHostScope(scope)
       const visibleWorkspaceHostIds = normalized === 'all' ? null : [normalized]
       set({ workspaceHostScope: normalized, visibleWorkspaceHostIds })
-      window.api.ui
-        .set({ workspaceHostScope: normalized, visibleWorkspaceHostIds })
-        .catch(console.error)
     },
     visibleWorkspaceHostIds: null,
     setVisibleWorkspaceHostIds: (ids) => {
@@ -82,9 +79,6 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
         workspaceHostScope = normalized[0]
       }
       set({ visibleWorkspaceHostIds: normalized, workspaceHostScope })
-      window.api.ui
-        .set({ visibleWorkspaceHostIds: normalized, workspaceHostScope })
-        .catch(console.error)
     },
     workspaceHostOrder: [],
     setWorkspaceHostOrder: (ids) => {
@@ -274,8 +268,15 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
     statusBarUsageMode: DEFAULT_STATUS_BAR_USAGE_MODE,
     setStatusBarUsageMode: (mode) => {
       const normalized = normalizeStatusBarUsageMode(mode)
-      window.api.ui.set({ statusBarUsageMode: normalized }).catch(console.error)
-      set({ statusBarUsageMode: normalized })
+      // Why: choosing either mode discovers the selector; old hosts never arm the new notice.
+      const updates = {
+        statusBarUsageMode: normalized,
+        ...(!get().statusBarCompactChangeNoticeDismissed
+          ? { statusBarCompactChangeNoticeDismissed: true }
+          : {})
+      }
+      window.api.ui.set(updates).catch(console.error)
+      set(updates)
     }
   }
 }

@@ -35,10 +35,6 @@ export function createSshIpcMocks(): SshIpcMocks {
       setCallbacks: vi.fn(),
       callbacksRef: { current: null as unknown }
     },
-    mockDeployAndLaunchRelay: vi.fn(),
-    mockForceStopRelayForTarget: vi.fn(),
-    mockAcceptSshPtyOutputData: vi.fn().mockResolvedValue({}),
-    mockAcceptSshPtyOutputExit: vi.fn().mockResolvedValue(undefined),
     mockMux: {
       dispose: vi.fn(),
       isDisposed: vi.fn().mockReturnValue(false),
@@ -50,18 +46,6 @@ export function createSshIpcMocks(): SshIpcMocks {
       notify: vi.fn(),
       probeLiveness: vi.fn().mockResolvedValue(false)
     },
-    mockPtyProvider: {
-      onData: vi.fn(),
-      onExit: vi.fn(),
-      onReplay: vi.fn(),
-      attach: vi.fn(),
-      attachForReconnect: vi.fn().mockResolvedValue({}),
-      shutdown: vi.fn(),
-      providerGeneration: 0
-    },
-    mockFsProvider: {},
-    mockGitProvider: {},
-    mockRegisterSshGitProvider: vi.fn(),
     mockPortForwardManager: {
       addForward: vi.fn(),
       updateForward: vi.fn(),
@@ -91,15 +75,7 @@ export function createSshIpcMocks(): SshIpcMocks {
     powerMonitorOnMock,
     mockSshStore,
     mockConnectionManager,
-    mockDeployAndLaunchRelay,
-    mockForceStopRelayForTarget,
-    mockAcceptSshPtyOutputData,
-    mockAcceptSshPtyOutputExit,
     mockMux,
-    mockPtyProvider,
-    mockFsProvider,
-    mockGitProvider,
-    mockRegisterSshGitProvider,
     mockPortForwardManager,
     mockPortScannerCallbacks,
     mockListConfigHosts,
@@ -125,25 +101,28 @@ export function createSshIpcMocks(): SshIpcMocks {
         off: powerMonitorOffMock
       }
     },
-    sshPtyOutputIntakeRegistry: {
-      acceptSshPtyOutputData: mockAcceptSshPtyOutputData,
-      acceptSshPtyOutputExit: mockAcceptSshPtyOutputExit,
-      allocateSshPtyProviderGeneration: (() => {
-        let generation = 0
-        return () => ++generation
-      })(),
-      beginSshPtyOutputGenerationMigration: vi.fn(() => ({
-        byPty: new Map(),
-        completion: Promise.resolve()
+    // A managed host by default; the real decision is covered by its own tests.
+    hostServerConnect: {
+      decideHostServer: vi.fn(async (): Promise<{ route: 'managed'; environmentId: string }> => ({
+        route: 'managed',
+        environmentId: 'env-test'
       })),
-      applySshPtySourceCancellationProof: vi.fn().mockReturnValue(false),
-      applySshPtySourceRecoveryCancellationProof: vi.fn().mockReturnValue(false),
-      closeSshPtyOutputGeneration: vi.fn(),
-      getSshPtyAcceptedSourceCheckpoints: vi.fn().mockReturnValue([]),
-      installSshPtySourceAckPublisher: vi.fn().mockReturnValue(() => {}),
-      installSshPtySourceCancellationPublisher: vi.fn().mockReturnValue(() => {})
+      recheckWhenManagedFenceClears: vi.fn(),
+      publishHostServerDecisionFailure: vi.fn(),
+      publishManagedServerConnect: vi.fn((targetId: string) => ({
+        targetId,
+        status: 'connected',
+        error: null,
+        reconnectAttempt: 0
+      })),
+      publishUnservedHostServer: vi.fn(() => new Error('This SSH host isn’t supported'))
     },
     sshConnectionStore: {
+      isRuntimeOwnedSshTarget: (target: { owner?: unknown }) => target.owner !== undefined,
+      isManagedOrcadSshTarget: (target: { orcadFence?: unknown; orcadProvisioning?: unknown }) =>
+        target.orcadFence !== undefined || target.orcadProvisioning !== undefined,
+      allowsDirectSshRelay: (target: { orcadFence?: unknown; orcadProvisioning?: unknown }) =>
+        target.orcadFence === undefined && target.orcadProvisioning === undefined,
       SshConnectionStore: class MockSshConnectionStore {
         constructor() {
           return mockSshStore
@@ -163,12 +142,7 @@ export function createSshIpcMocks(): SshIpcMocks {
         }
       }
     },
-    sshRelayDeploy: {
-      deployAndLaunchRelay: mockDeployAndLaunchRelay
-    },
-    sshRelayReset: {
-      forceStopRelayForTarget: mockForceStopRelayForTarget
-    },
+
     sshChannelMultiplexer: {
       SshChannelMultiplexer: class MockSshChannelMultiplexer {
         constructor() {
@@ -176,50 +150,14 @@ export function createSshIpcMocks(): SshIpcMocks {
         }
       }
     },
-    sshPtyProvider: {
-      isSshPtyNotFoundError: (err: unknown) =>
-        (err instanceof Error ? err.message : String(err)).includes('not found'),
-      SshPtyProvider: class MockSshPtyProvider {
-        constructor(_targetId: unknown, _mux: unknown, _env: unknown, providerGeneration: number) {
-          mockPtyProvider.providerGeneration = providerGeneration
-          return mockPtyProvider
-        }
-      }
-    },
-    sshFilesystemProvider: {
-      SshFilesystemProvider: class MockSshFilesystemProvider {
-        constructor() {
-          return mockFsProvider
-        }
-      }
-    },
     pty: {
-      registerSshPtyProvider: vi.fn(),
-      unregisterSshPtyProvider: vi.fn(),
       clearPtyOwnershipForConnection: vi.fn(),
       clearProviderPtyState: vi.fn(),
       deletePtyOwnership: vi.fn(),
       setPtyOwnership: vi.fn(),
-      getSshPtyProvider: vi.fn(),
       getPtyIdsForConnection: vi.fn().mockReturnValue([]),
       isCurrentPtyExit: vi.fn().mockReturnValue(true),
       isRendererPtyOutputPaused: vi.fn().mockReturnValue(false)
-    },
-    sshFilesystemDispatch: {
-      registerSshFilesystemProvider: vi.fn(),
-      unregisterSshFilesystemProvider: vi.fn(),
-      getSshFilesystemProvider: vi.fn()
-    },
-    sshGitProvider: {
-      SshGitProvider: class MockSshGitProvider {
-        constructor() {
-          return mockGitProvider
-        }
-      }
-    },
-    sshGitDispatch: {
-      registerSshGitProvider: mockRegisterSshGitProvider,
-      unregisterSshGitProvider: vi.fn()
     },
     sshPortForward: {
       SshPortForwardManager: class MockPortForwardManager {

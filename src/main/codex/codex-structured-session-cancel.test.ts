@@ -10,6 +10,7 @@ const processWork = vi.hoisted(() => {
       capturedAtMs: 0
     })),
     terminateDescendantSnapshotAndWait: vi.fn(never),
+    terminateDescendantSnapshotWithVerdict: vi.fn(never),
     queryWindowsProcessDescendants: vi.fn(never),
     terminateWindowsProcessTree: vi.fn(never)
   }
@@ -20,7 +21,8 @@ vi.mock('../pty-descendant-termination', async (importOriginal) => ({
 }))
 vi.mock('../pty-descendant-exit-verification', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  terminateDescendantSnapshotAndWait: processWork.terminateDescendantSnapshotAndWait
+  terminateDescendantSnapshotAndWait: processWork.terminateDescendantSnapshotAndWait,
+  terminateDescendantSnapshotWithVerdict: processWork.terminateDescendantSnapshotWithVerdict
 }))
 vi.mock('../providers/windows-foreground-process-rows', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -47,6 +49,7 @@ import {
   type CodexStructuredSessionAdapterDeps,
   type CodexStructuredSessionEvent
 } from './codex-structured-session-adapter'
+import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const THREAD_ID = 'thread-abc'
 const USER_MESSAGE: AgentJournalMessageItem = {
@@ -69,7 +72,7 @@ function identity(): AgentSessionJournalIdentity {
     workspaceId: 'ws-1',
     hostId: 'host-1',
     agent: 'codex',
-    providerHandle: { kind: 'codex', threadId: THREAD_ID }
+    providerHandle: codexProviderHandle(THREAD_ID)
   }
 }
 

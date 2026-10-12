@@ -17,6 +17,7 @@ import {
   resetBrowserTabCreateEnvironment,
   stubBrowserTabCreateEnvironment
 } from './web-runtime-session-test-harness'
+import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
 
 const mocks = vi.hoisted(() => ({
   getState: vi.fn(),
@@ -166,13 +167,9 @@ describe('browser create focus intent across the client-host preparation await',
         result: { browserPageId: 'remote-browser-page-1' }
       })
       .mockResolvedValueOnce({ id: 'list', ok: true, result: makeSnapshot() })
-    vi.stubGlobal('window', {
-      api: {
-        runtimeEnvironments: {
-          prepareBrowserClientHostPlacement: preparePlacement,
-          call: runtimeCall
-        }
-      }
+    stubRuntimeEnvironmentBridge({
+      prepareBrowserClientHostPlacement: preparePlacement,
+      call: runtimeCall
     })
 
     const creation = createWebRuntimeSessionBrowserTab({ worktreeId: WORKTREE_ID })

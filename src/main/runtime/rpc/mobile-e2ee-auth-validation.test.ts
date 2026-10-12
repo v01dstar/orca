@@ -13,7 +13,7 @@ function run(
   return authenticateMobileE2EE({
     plaintext: JSON.stringify({ type: 'e2ee_auth', ...auth }),
     v2Session: options.v2 ? v2Session : null,
-    resolveAuthenticatedDevice: (token) => (token === device.deviceToken ? device : null),
+    resolveDevice: (token) => (token === device.deviceToken ? device : null),
     ...(options.assertions === false
       ? {}
       : { resolveAssertedDevice: vi.fn((a: string) => (a === 'good' ? device : null)) })

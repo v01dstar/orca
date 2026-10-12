@@ -4,6 +4,10 @@ import {
   toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
+import {
+  runtimeTargetForOwnerEnvironment,
+  type RuntimeClientTarget
+} from '@/runtime/runtime-client-target'
 
 export type CapturedRuntimeOwner = string | null | undefined
 
@@ -32,4 +36,11 @@ export function worktreeRefreshOptions(
     requireAuthoritative: true,
     ...(executionHostId ? { executionHostId } : {})
   }
+}
+
+/** The host the Add Project dialog picked; no picked server means this app. */
+export function resolveAddRepoRuntimeTarget(
+  runtimeEnvironmentId: string | null | undefined
+): RuntimeClientTarget {
+  return runtimeTargetForOwnerEnvironment(runtimeEnvironmentId ?? null)
 }

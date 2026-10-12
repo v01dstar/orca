@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
+import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
+import type * as FileSystem from 'node:fs/promises'
 import {
   enoent,
   readdirMock,
@@ -9,7 +11,6 @@ import {
   createRuntimeFileCommands,
   useRuntimeFileCommandsLifecycle
 } from './orca-runtime-files-test-harness'
-import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 
 vi.mock('fs', async () => (await import('./orca-runtime-files-mock-registry')).fsModuleMock())
 vi.mock('fs/promises', async () =>
@@ -29,10 +30,6 @@ vi.mock(
   '../ipc/local-worktree-runtime-options',
   async () => (await import('./orca-runtime-files-mock-registry')).localWorktreeRuntimeOptionsMock
 )
-vi.mock(
-  '../providers/ssh-filesystem-dispatch',
-  async () => (await import('./orca-runtime-files-mock-registry')).sshFilesystemDispatchMock
-)
 
 function dirEntry(args: { name: string; directory?: boolean; symlink?: boolean }) {
   return {
@@ -45,7 +42,47 @@ function dirEntry(args: { name: string; directory?: boolean; symlink?: boolean }
 describe('RuntimeFileCommands', () => {
   useRuntimeFileCommandsLifecycle()
 
-  it('opens source control diffs through the renderer host (inheriting active runtime env)', async () => {
+  it('returns the authorized local file change time for media consistency checks', async () => {
+    const { commands } = createRuntimeFileCommands()
+    resolveAuthorizedPathMock.mockResolvedValue('/repo/video.mp4')
+    statMock.mockResolvedValue({ size: 3, mtimeMs: 1, ctimeMs: 2, isDirectory: () => false })
+    expect(await commands.statRuntimeFile('id:wt-1', 'video.mp4')).toEqual({
+      size: 3,
+      isDirectory: false,
+      mtime: 1,
+      ctime: 2
+    })
+    expect(resolveAuthorizedPathMock).toHaveBeenCalled()
+    expect(statMock).toHaveBeenCalledWith('/repo/video.mp4')
+  })
+
+  it('detects a real same-size rewrite even after restoring the modification time', async () => {
+    vi.useRealTimers()
+    const files = await vi.importActual<typeof FileSystem>('node:fs/promises')
+    const { join } = await import('node:path')
+    const { tmpdir } = await import('node:os')
+    const root = await files.mkdtemp(join(tmpdir(), 'orca-media-revision-'))
+    const filePath = join(root, 'video.mp4')
+    try {
+      await files.writeFile(filePath, 'abc')
+      await files.utimes(filePath, 1, 2)
+      const { commands } = createRuntimeFileCommands()
+      resolveAuthorizedPathMock.mockResolvedValue(filePath)
+      statMock.mockImplementation((path: string) => files.stat(path))
+      const before = await commands.statRuntimeFile('id:wt-1', 'video.mp4')
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      await files.writeFile(filePath, 'xyz')
+      await files.utimes(filePath, 1, 2)
+      const after = await commands.statRuntimeFile('id:wt-1', 'video.mp4')
+      expect(after.size).toBe(before.size)
+      expect(after.mtime).toBe(before.mtime)
+      expect(after.ctime).not.toBe(before.ctime)
+    } finally {
+      await files.rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it('opens source control diffs through the renderer host as owned by this desktop, not the focused server', async () => {
     const openDiff = vi.fn()
     const { commands } = createRuntimeFileCommands({ openDiff })
 
@@ -56,7 +93,7 @@ describe('RuntimeFileCommands', () => {
       '/repo/docs/readme.md',
       'docs/readme.md',
       true,
-      undefined,
+      null,
       undefined
     )
     expect(result).toEqual({
@@ -67,7 +104,7 @@ describe('RuntimeFileCommands', () => {
     })
   })
 
-  it('opens text files through the renderer host (inheriting active runtime env)', async () => {
+  it('opens text files through the renderer host as owned by this desktop, not the focused server', async () => {
     const openFile = vi.fn()
     const { commands } = createRuntimeFileCommands({ openFile })
     resolveAuthorizedPathMock.mockResolvedValue('/repo/docs/readme.md')
@@ -79,7 +116,7 @@ describe('RuntimeFileCommands', () => {
       'wt-1',
       '/repo/docs/readme.md',
       'docs/readme.md',
-      undefined,
+      null,
       undefined
     )
     expect(result).toEqual({
@@ -102,7 +139,7 @@ describe('RuntimeFileCommands', () => {
       'wt-1',
       '/repo/assets/logo.png',
       'assets/logo.png',
-      undefined,
+      null,
       undefined
     )
     expect(result).toEqual({
@@ -127,7 +164,7 @@ describe('RuntimeFileCommands', () => {
       'wt-1',
       '/repo/docs/readme.md',
       'docs/readme.md',
-      undefined,
+      null,
       'all'
     )
     expect(openDiff).toHaveBeenCalledWith(
@@ -135,8 +172,50 @@ describe('RuntimeFileCommands', () => {
       '/repo/docs/readme.md',
       'docs/readme.md',
       false,
-      undefined,
+      null,
       'host'
+    )
+  })
+
+  it('refuses SSH file opens without creating an editor tab', async () => {
+    const openFile = vi.fn()
+    const resolveRuntimeFileTarget = vi.fn(async () => ({
+      worktree: { id: 'wt-1', repoId: 'repo-1', path: '/remote/repo' },
+      executionHostId: 'ssh:ssh-1'
+    }))
+    const { commands } = createRuntimeFileCommands({
+      openFile,
+      path: '/remote/repo',
+      resolveRuntimeFileTarget
+    })
+
+    await expect(commands.openMobileFile('id:wt-1', 'docs/readme.md')).rejects.toThrow(
+      SshHostNotServedError
+    )
+    expect(openFile).not.toHaveBeenCalled()
+  })
+
+  it('names a paired server as the owner of a diff its catalog row is stamped with', async () => {
+    const openDiff = vi.fn()
+    const resolveRuntimeFileTarget = vi.fn(async () => ({
+      worktree: { id: 'wt-1', repoId: 'repo-1', path: '/remote/repo' },
+      executionHostId: 'runtime:env-a'
+    }))
+    const { commands } = createRuntimeFileCommands({
+      openDiff,
+      path: '/remote/repo',
+      resolveRuntimeFileTarget
+    })
+
+    await commands.openMobileDiff('id:wt-1', 'docs/readme.md', true)
+
+    expect(openDiff).toHaveBeenCalledWith(
+      'wt-1',
+      '/remote/repo/docs/readme.md',
+      'docs/readme.md',
+      true,
+      'env-a',
+      undefined
     )
   })
 
@@ -154,7 +233,7 @@ describe('RuntimeFileCommands', () => {
         'wt-1',
         `/repo/${relativePath}`,
         relativePath,
-        undefined,
+        null,
         undefined
       )
       expect(result).toEqual({ worktree: 'wt-1', relativePath, kind: 'binary', opened: true })
@@ -185,31 +264,6 @@ describe('RuntimeFileCommands', () => {
     expect(openFile).not.toHaveBeenCalled()
   })
 
-  it('rejects missing remote files without creating an editor tab', async () => {
-    const openFile = vi.fn()
-    const resolveRuntimeFileTarget = vi.fn(async () => ({
-      worktree: {
-        id: 'wt-1',
-        repoId: 'repo-1',
-        path: '/remote/repo'
-      },
-      executionHostId: 'ssh:ssh-1'
-    }))
-    const { commands } = createRuntimeFileCommands({
-      openFile,
-      path: '/remote/repo',
-      resolveRuntimeFileTarget
-    })
-    vi.mocked(getSshFilesystemProvider).mockReturnValue({
-      stat: vi.fn().mockRejectedValue(new Error('ENOENT: no such file or directory'))
-    } as never)
-
-    await expect(commands.openMobileFile('id:wt-1', 'docs/missing.md')).rejects.toThrow(
-      "ENOENT: no such file or directory, open '/remote/repo/docs/missing.md'"
-    )
-    expect(openFile).not.toHaveBeenCalled()
-  })
-
   it('rejects a local directory without creating an editor tab', async () => {
     const openFile = vi.fn()
     const { commands } = createRuntimeFileCommands({ openFile })
@@ -218,32 +272,6 @@ describe('RuntimeFileCommands', () => {
 
     await expect(commands.openMobileFile('id:wt-1', 'docs/notes.pdf')).rejects.toThrow(
       "EISDIR: illegal operation on a directory, open '/repo/docs/notes.pdf'"
-    )
-    expect(openFile).not.toHaveBeenCalled()
-  })
-
-  it('rejects a remote directory without creating an editor tab', async () => {
-    const openFile = vi.fn()
-    const resolveRuntimeFileTarget = vi.fn(async () => ({
-      worktree: {
-        id: 'wt-1',
-        repoId: 'repo-1',
-        path: '/remote/repo'
-      },
-      executionHostId: 'ssh:ssh-1'
-    }))
-    const { commands } = createRuntimeFileCommands({
-      openFile,
-      path: '/remote/repo',
-      resolveRuntimeFileTarget
-    })
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the open path only calls `stat`.
-    vi.mocked(getSshFilesystemProvider).mockReturnValue({
-      stat: vi.fn().mockResolvedValue({ type: 'directory', size: 0, mtime: 0 })
-    } as never)
-
-    await expect(commands.openMobileFile('id:wt-1', 'src')).rejects.toThrow(
-      "EISDIR: illegal operation on a directory, open '/remote/repo/src'"
     )
     expect(openFile).not.toHaveBeenCalled()
   })
@@ -264,4 +292,28 @@ describe('RuntimeFileCommands', () => {
     ])
     expect(statMock).not.toHaveBeenCalledWith('/repo/linked-docs')
   })
+  it.each([
+    { setting: true, override: undefined, expected: true },
+    { setting: true, override: false, expected: false },
+    { setting: false, override: true, expected: true }
+  ])(
+    'applies runtime symlink setting $setting with override $override',
+    async ({ setting, override, expected }) => {
+      const { commands, store } = createRuntimeFileCommands()
+      store.getSettings.mockReturnValue({ followSymlinkedDirectories: setting })
+      resolveAuthorizedPathMock.mockImplementation(async (path) => path)
+      readdirMock.mockResolvedValue([dirEntry({ name: 'linked-docs', symlink: true })])
+      statMock.mockResolvedValue({ isDirectory: () => true })
+
+      await expect(
+        commands.readFileExplorerDir('id:wt-1', '', { followSymlinks: override })
+      ).resolves.toEqual([{ name: 'linked-docs', isDirectory: expected, isSymlink: true }])
+      expect(store.getSettings).toHaveBeenCalledTimes(override === undefined ? 1 : 0)
+      if (expected) {
+        expect(statMock).toHaveBeenCalledWith('/repo/linked-docs')
+      } else {
+        expect(statMock).not.toHaveBeenCalled()
+      }
+    }
+  )
 })

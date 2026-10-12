@@ -30,6 +30,7 @@ import {
   encodeTerminalStreamText
 } from '../../../../shared/terminal-stream-protocol'
 import type { PtyTransport } from './pty-transport-types'
+import { stubRuntimeEnvironmentBridge } from '../../runtime/runtime-environment-bridge-fixture'
 
 type ResolvePaneOutcome = { handle: string } | { error: Error }
 
@@ -214,14 +215,7 @@ describe('remote runtime resubscribe failure: recovery routing', () => {
         return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
       }
     )
-    vi.stubGlobal('window', {
-      api: {
-        runtimeEnvironments: {
-          call: runtimeCall,
-          subscribe: runtimeSubscribe
-        }
-      }
-    })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall, subscribe: runtimeSubscribe })
   })
 
   it('re-resolves and adopts the replacement handle when a resubscribe fails stale', async () => {

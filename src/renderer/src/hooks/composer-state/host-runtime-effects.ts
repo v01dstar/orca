@@ -4,9 +4,7 @@ type HostRuntimeEffectsInput = Pick<
   ComposerModel,
   | 'commitHookCheckIfCurrent'
   | 'connectionId'
-  | 'createGateMode'
   | 'disabledTuiAgents'
-  | 'enableIssueAutomation'
   | 'ensureDetectedAgents'
   | 'ensureRemoteDetectedAgents'
   | 'ensureRuntimeDetectedAgents'
@@ -19,12 +17,9 @@ type HostRuntimeEffectsInput = Pick<
   | 'repoIdRef'
   | 'runtimeEnvironmentId'
   | 'selectedRepoConnectionIdRef'
-  | 'selectedRepoExecutionHostId'
   | 'selectedRepoHookContextKey'
   | 'selectedRepoIsGit'
-  | 'selectedRepoSettingsRef'
   | 'selectedRepoSshStatus'
-  | 'setLoadedIssueCommand'
   | 'setTuiAgent'
   | 'settings'
   | 'tuiAgent'
@@ -33,9 +28,13 @@ type HostRuntimeEffectsInput = Pick<
 import { useEffect, useCallback } from 'react'
 import { filterEnabledTuiAgents, isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
 import { getAgentCatalog } from '@/lib/agent-catalog'
-import { readRuntimeIssueCommand } from '@/runtime/runtime-hooks-client'
 import { useAppStore } from '@/store'
 import { isSshConnectInProgress } from '@/lib/new-workspace-ssh-gate'
+import {
+  connectRepoSshConnection,
+  getRepoSshConnection,
+  selectRepoSshGateInput
+} from '@/lib/repo-ssh-connection'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 
@@ -43,9 +42,7 @@ export function useHostRuntimeEffects(input: HostRuntimeEffectsInput) {
   const {
     commitHookCheckIfCurrent,
     connectionId,
-    createGateMode,
     disabledTuiAgents,
-    enableIssueAutomation,
     ensureDetectedAgents,
     ensureRemoteDetectedAgents,
     ensureRuntimeDetectedAgents,
@@ -58,12 +55,9 @@ export function useHostRuntimeEffects(input: HostRuntimeEffectsInput) {
     repoIdRef,
     runtimeEnvironmentId,
     selectedRepoConnectionIdRef,
-    selectedRepoExecutionHostId,
     selectedRepoHookContextKey,
     selectedRepoIsGit,
-    selectedRepoSettingsRef,
     selectedRepoSshStatus,
-    setLoadedIssueCommand,
     setTuiAgent,
     settings,
     tuiAgent
@@ -109,7 +103,7 @@ export function useHostRuntimeEffects(input: HostRuntimeEffectsInput) {
     setTuiAgent
   ])
 
-  // Per-repo: load yaml hooks + issue command template.
+  // Per-repo: load yaml hooks.
   useEffect(() => {
     if (!repoId || !selectedRepoIsGit || !selectedRepoHookContextKey) {
       return
@@ -129,59 +123,16 @@ export function useHostRuntimeEffects(input: HostRuntimeEffectsInput) {
         }
       })
 
-    if (!enableIssueAutomation) {
-      return () => {
-        cancelled = true
-      }
-    }
-
-    if (createGateMode === 'quick') {
-      return () => {
-        cancelled = true
-      }
-    }
-
-    void readRuntimeIssueCommand(
-      selectedRepoSettingsRef.current,
-      repoId,
-      selectedRepoExecutionHostId ?? undefined
-    )
-      .then((result) => {
-        if (!cancelled) {
-          setLoadedIssueCommand({ contextKey: selectedRepoHookContextKey, result })
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setLoadedIssueCommand({
-            contextKey: selectedRepoHookContextKey,
-            result: {
-              status: 'error',
-              localContent: null,
-              sharedContent: null,
-              effectiveContent: null,
-              localFilePath: '',
-              source: 'none'
-            }
-          })
-        }
-      })
-
     return () => {
       cancelled = true
     }
   }, [
     commitHookCheckIfCurrent,
-    createGateMode,
-    enableIssueAutomation,
     loadHookCheckForRepo,
     repoId,
-    selectedRepoExecutionHostId,
     selectedRepoHookContextKey,
     selectedRepoIsGit,
-    runtimeEnvironmentId,
-    selectedRepoSettingsRef,
-    setLoadedIssueCommand
+    runtimeEnvironmentId
   ])
 
   const onConnectSelectedRepo = useCallback(async (): Promise<void> => {
@@ -191,16 +142,17 @@ export function useHostRuntimeEffects(input: HostRuntimeEffectsInput) {
     }
     const liveState = useAppStore.getState()
     const liveRepo = liveState.repos.find((repo) => repo.id === repoIdRef.current)
-    if (liveRepo?.connectionId !== targetId) {
+    const connection = liveRepo ? getRepoSshConnection(liveRepo) : null
+    if (!liveRepo || connection?.targetId !== targetId) {
       return
     }
-    const liveStatus = liveState.sshConnectionStates.get(targetId)?.status ?? null
+    const liveStatus = selectRepoSshGateInput(liveState, liveRepo).status
     if (liveStatus === 'connected' || isSshConnectInProgress(liveStatus)) {
       return
     }
 
     try {
-      await window.api.ssh.connect({ targetId })
+      await connectRepoSshConnection(connection)
     } catch (error) {
       toast.error(
         error instanceof Error

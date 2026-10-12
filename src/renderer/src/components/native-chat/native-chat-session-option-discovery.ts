@@ -9,7 +9,7 @@ import {
   getCommitMessageModelDiscoveryHostKeyForScope,
   LOCAL_COMMIT_MESSAGE_HOST_KEY
 } from '../../../../shared/commit-message-host-key'
-import { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
+import { runtimeTargetForWorkspaceOwner } from '@/lib/resolve-owner'
 import { hasExplicitTuiLaunchCommand } from '../../../../shared/tui-agent-launch-command-override'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import {
@@ -27,6 +27,7 @@ import type {
   AgentSessionModelOption
 } from '../../../../shared/agent-session-wire'
 import { useAppStore } from '@/store'
+import { findKnownWorktreeById } from '@/store/slices/worktrees/listing/detected-worktree-meta'
 
 export type NativeChatModelDiscoveryContext = {
   hostKey: string
@@ -62,13 +63,20 @@ export function resolveNativeChatModelDiscoveryContext(
   if (worktreeId && connectionId === undefined) {
     return null
   }
-  const settings = getSettingsForAgentTabRuntimeOwner(terminalTabId)
-  const worktreePath = worktreeId ? (state.getKnownWorktreeById?.(worktreeId)?.path ?? '') : ''
-  const scope = getRuntimeGitScope(settings, connectionId)
+  // Why: discovery asks the worktree's owner; an owner the rows can't name gets no models.
+  const target = worktreeId
+    ? runtimeTargetForWorkspaceOwner(state, { workspaceId: worktreeId })
+    : ({ kind: 'local' } as const)
+  if (!target) {
+    return null
+  }
+  const worktreePath = worktreeId ? (findKnownWorktreeById(state, worktreeId)?.path ?? '') : ''
+  const scope = getRuntimeGitScope(target, connectionId)
   return {
     hostKey: resolveNativeChatModelDiscoveryHostKey(state, worktreeId, worktreePath, scope),
     runtime: {
-      settings,
+      target,
+      prefs: state.settings,
       worktreeId,
       worktreePath,
       ...(connectionId ? { connectionId } : {})
@@ -127,11 +135,11 @@ export async function discoverNativeChatCatalogModels(
   const hostCatalogAgent =
     agent === 'claude' ? ('claude' as const) : agent === 'codex' ? ('codex' as const) : null
   // Only `local` proves a native pane: a paired runtime's key also covers its SSH/WSL worktrees.
-  // A custom launch command runs a binary the structured catalog never lists; the CLI listing honors it.
+  // Terminal-backed chat runs the full custom command line, which only the CLI listing models.
   if (
     hostCatalogAgent &&
     hostKey === LOCAL_COMMIT_MESSAGE_HOST_KEY &&
-    !hasExplicitTuiLaunchCommand(context.settings, hostCatalogAgent)
+    !hasExplicitTuiLaunchCommand(context.prefs, hostCatalogAgent)
   ) {
     const fromHost = await readLocalHostCatalogModels(hostCatalogAgent)
     if (fromHost) {

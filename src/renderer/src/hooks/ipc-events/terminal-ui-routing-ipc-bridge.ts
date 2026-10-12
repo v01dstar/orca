@@ -4,7 +4,7 @@ import {
   dispatchTerminalPaneSplitRequest,
   queueTerminalPaneSplitRequest
 } from '@/components/terminal-pane/terminal-pane-split-request-routing'
-import { hasRegisteredRuntimeTerminalTab } from '@/runtime/sync-runtime-graph'
+import { hasRegisteredRuntimeTerminalTab } from '@/runtime/mounted-terminal-tab-registry'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import { useAppStore } from '../../store'
 import type { AppState } from '../../store/types'
@@ -111,8 +111,10 @@ export function registerTerminalUiRoutingIpcBridge(unsubs: (() => void)[]): void
   unsubs.push(window.api.ui.onSplitTerminal(routeRuntimeTerminalSplitRequest))
 
   unsubs.push(
-    window.api.ui.onRenameTerminal(({ tabId, title }) => {
-      useAppStore.getState().setTabCustomTitle(tabId, title)
+    window.api.ui.onRenameTerminal(({ tabId, title, recordInteraction }) => {
+      useAppStore
+        .getState()
+        .setTabCustomTitle(tabId, title, recordInteraction === false ? { recordInteraction } : {})
     })
   )
 
