@@ -20,7 +20,7 @@ export type InstaboxApi = {
     machineId: string
     action: InstaboxMachineAction
   }) => Promise<InstaboxMachine>
-  // The machine must be stopped; saves its root disk and /data (not RAM).
+  // Running or stopped; saves its root disk and /data (not RAM).
   saveSnapshot: (args: { machineId: string; name: string }) => Promise<InstaboxSnapshot>
   deleteMachine: (args: { machineId: string }) => Promise<void>
   connectMachine: (args: { machineId: string }) => Promise<PublicKnownRuntimeEnvironment>

@@ -170,7 +170,7 @@ export function createInstaboxApiClient(options: InstaboxApiClientOptions) {
       }),
     listSnapshots: async (): Promise<InstaboxSnapshot[]> =>
       (await request(SnapshotListSchema, '/v1/snapshots')).snapshots,
-    // The machine must be stopped; saves its root disk and /data (including HOME credentials).
+    // Running or stopped; saves its root disk and /data (including HOME credentials).
     createSnapshot: (machineId: string, name: string): Promise<InstaboxSnapshot> =>
       mutate(InstaboxSnapshotSchema, `/v1/machines/${encodeURIComponent(machineId)}/snapshots`, {
         method: 'POST',

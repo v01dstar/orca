@@ -25,7 +25,7 @@ const NS = 'auto.components.settings.instabox.InstaboxCreateMachineForm'
 
 type InstaboxCreateMachineFormProps = {
   templates: readonly InstaboxTemplate[]
-  // Orca-capable snapshots (saved stopped machines) a machine can also be created from.
+  // Orca-capable snapshots (saved machine disks) a machine can also be created from.
   snapshots: readonly InstaboxSnapshot[]
   creating: boolean
   onCancel: () => void

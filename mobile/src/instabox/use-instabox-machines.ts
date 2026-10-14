@@ -24,7 +24,7 @@ import {
   signOutOfInstabox
 } from './instabox-mobile-session'
 
-// What a new machine is created from: a template, or a saved snapshot of a stopped machine.
+// What a new machine is created from: a template, or a saved snapshot of a machine.
 export type InstaboxMachineSource = { templateId: string } | { snapshotId: string }
 
 export type InstaboxMachineRowModel = {

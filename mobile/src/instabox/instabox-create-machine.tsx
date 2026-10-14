@@ -68,9 +68,7 @@ export function InstaboxCreateMachine({
           ))}
         </View>
       ) : (
-        <Text style={styles.hint}>
-          No snapshots yet. Stop a machine, then save it as a snapshot.
-        </Text>
+        <Text style={styles.hint}>No snapshots yet. Save one from a machine below.</Text>
       )}
       <View style={styles.createRow}>
         <TextInput
