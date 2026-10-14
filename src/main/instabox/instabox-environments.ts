@@ -13,7 +13,11 @@ import {
   updateEnvironmentFromPairingCode
 } from '../../shared/runtime-environment-store'
 import type { KnownRuntimeEnvironment } from '../../shared/runtime-environments'
-import type { InstaboxMachine } from '../../shared/instabox/instabox-api-types'
+import {
+  migrateInstaboxServerUrl,
+  type InstaboxMachine
+} from '../../shared/instabox/instabox-api-types'
+import { InstaboxApiError } from '../../shared/instabox/instabox-api-client'
 import type { InstaboxAccount } from './instabox-account'
 import { bootstrapInstaboxDevice } from './instabox-device-bootstrap'
 import type { InstaboxTunnelProxy } from './instabox-tunnel-proxy'
@@ -33,7 +37,9 @@ export class InstaboxEnvironments {
     private readonly userDataPath: string,
     private readonly account: InstaboxAccount,
     private readonly proxy: InstaboxTunnelProxy,
-    private readonly onChanged: () => void
+    private readonly onChanged: () => void,
+    // Retires the removed environment's transport and session state, as Settings' remove does.
+    private readonly onRemoved: (environmentId: string) => void = () => {}
   ) {}
 
   links(): InstaboxEnvironmentLink[] {
@@ -69,7 +75,21 @@ export class InstaboxEnvironments {
 
   /** The proxy's resolver: a fresh ticket per socket, refusing it if the runtime's key changed. */
   async resolveTunnel(machineId: string): Promise<{ endpoint: string }> {
-    const connection = await this.account.client().createOrcaConnection(machineId, 'runtime')
+    const connection = await this.account
+      .client()
+      .createOrcaConnection(machineId, 'runtime')
+      .catch((error: unknown) => {
+        // Why: a machine deleted elsewhere would otherwise keep its entry redialing forever.
+        // http_error is a non-API 404 (proxy page), which says nothing about the machine.
+        if (
+          error instanceof InstaboxApiError &&
+          error.status === 404 &&
+          error.code !== 'http_error'
+        ) {
+          this.forget(machineId)
+        }
+        throw error
+      })
     const known = this.environment(machineId)?.endpoints[0]?.publicKeyB64
     if (known && known !== connection.serverPublicKey) {
       // Why: a new runtime identity (fork, reset) invalidates the stored token; re-enroll once.
@@ -153,13 +173,28 @@ export class InstaboxEnvironments {
 
   /** Forgets a machine's environment, e.g. after the machine was deleted. */
   forget(machineId: string): void {
+    this.forgetWhere((link) => link.machineId === machineId)
+  }
+
+  /** Forgets machines this server no longer lists: deleted from the phone, CLI or dashboard. */
+  forgetMissing(serverUrl: string, machineIds: ReadonlySet<string>): void {
+    this.forgetWhere(
+      (link) =>
+        migrateInstaboxServerUrl(link.serverUrl) === serverUrl && !machineIds.has(link.machineId)
+    )
+  }
+
+  private forgetWhere(matches: (link: InstaboxEnvironmentLink) => boolean): void {
     const links = this.links()
-    const link = links.find((entry) => entry.machineId === machineId)
-    if (!link) {
+    const gone = links.filter(matches)
+    if (gone.length === 0) {
       return
     }
-    removeEnvironment(this.userDataPath, link.environmentId)
-    this.saveLinks(links.filter((entry) => entry !== link))
+    for (const link of gone) {
+      removeEnvironment(this.userDataPath, link.environmentId)
+      this.onRemoved(link.environmentId)
+    }
+    this.saveLinks(links.filter((link) => !gone.includes(link)))
     this.onChanged()
   }
 

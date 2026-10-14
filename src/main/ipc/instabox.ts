@@ -19,6 +19,9 @@ import { redactRuntimeEnvironment } from '../../shared/runtime-environments'
 import { InstaboxAccount } from '../instabox/instabox-account'
 import { InstaboxEnvironments } from '../instabox/instabox-environments'
 import { InstaboxTunnelProxy } from '../instabox/instabox-tunnel-proxy'
+import type { Store } from '../persistence'
+import { retireRemovedRuntimeEnvironment } from './runtime-environment-removal-cleanup'
+import { invalidateRuntimeEnvironmentTransport } from './runtime-environments'
 
 function broadcast(channel: string, payload?: unknown): void {
   for (const window of BrowserWindow.getAllWindows()) {
@@ -32,7 +35,7 @@ function broadcast(channel: string, payload?: unknown): void {
   }
 }
 
-export async function registerInstaboxHandlers(): Promise<void> {
+export async function registerInstaboxHandlers(store: Store): Promise<void> {
   const userDataPath = app.getPath('userData')
   const account = new InstaboxAccount(userDataPath)
   let environments: InstaboxEnvironments | null = null
@@ -43,8 +46,19 @@ export async function registerInstaboxHandlers(): Promise<void> {
     return environments.resolveTunnel(machineId)
   })
   await proxy.start()
-  environments = new InstaboxEnvironments(userDataPath, account, proxy, () =>
-    broadcast(INSTABOX_ENVIRONMENTS_CHANGED_CHANNEL)
+  environments = new InstaboxEnvironments(
+    userDataPath,
+    account,
+    proxy,
+    () => broadcast(INSTABOX_ENVIRONMENTS_CHANGED_CHANNEL),
+    (environmentId) =>
+      void retireRemovedRuntimeEnvironment(
+        environmentId,
+        invalidateRuntimeEnvironmentTransport,
+        store
+      ).catch((error: unknown) =>
+        console.warn('[instabox] Retiring a deleted machine environment failed:', error)
+      )
   )
   const envs = environments
   envs.refreshEndpoints()
@@ -58,6 +72,29 @@ export async function registerInstaboxHandlers(): Promise<void> {
       await envs.connect(machine)
     }
   }
+
+  // Why: machines are also created and deleted from the phone, CLI and dashboard; mirror the
+  // server so a deleted machine's entry goes and a new running one gets an entry.
+  function syncEnvironments(machines: InstaboxMachine[], templates: InstaboxTemplate[]): void {
+    envs.forgetMissing(account.client().baseUrl, new Set(machines.map((machine) => machine.id)))
+    for (const machine of instaboxOrcaMachines(machines, templates)) {
+      void ensureEnvironment(machine, templates).catch((error: unknown) =>
+        console.warn(`[instabox] Adding machine ${machine.id} to Orca failed:`, error)
+      )
+    }
+  }
+
+  async function syncFromServer(): Promise<void> {
+    if (!account.state().signedIn) {
+      return
+    }
+    const client = account.client()
+    const [machines, templates] = await Promise.all([client.listMachines(), client.templates()])
+    syncEnvironments(machines, templates)
+  }
+  void syncFromServer().catch((error: unknown) =>
+    console.warn('[instabox] Syncing machines at startup failed:', error)
+  )
 
   ipcMain.removeHandler('instabox:getState')
   ipcMain.handle('instabox:getState', () => account.state())
@@ -78,6 +115,7 @@ export async function registerInstaboxHandlers(): Promise<void> {
       client.templates(),
       client.listSnapshots()
     ])
+    syncEnvironments(machines, templates)
     const links = envs.links()
     return {
       machines: instaboxOrcaMachines(machines, templates).map((machine) => ({

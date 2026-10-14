@@ -224,7 +224,7 @@ export function registerCoreHandlers(
   registerRuntimeHandlers(runtime)
   registerRuntimeEnvironmentHandlers(store)
   registerEphemeralVmHandlers(store, pluginService)
-  void registerInstaboxHandlers().catch((error: unknown) =>
+  void registerInstaboxHandlers(store).catch((error: unknown) =>
     console.error('[instabox] Failed to start instabox integration:', error)
   )
   // Session history and terminal resume are not chats; a refused host leaves nothing to check.
