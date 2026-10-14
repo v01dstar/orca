@@ -2,6 +2,12 @@ import { useCallback, useState } from 'react'
 import { Alert, StyleSheet } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useOpenMobileAccounts } from '../accounts/use-open-mobile-accounts'
+import {
+  removeHostConfirmCopy,
+  removeHostErrorMessage,
+  removeHostEverywhere
+} from '../instabox/instabox-host-sync'
+import { useInstaboxHostSync } from '../instabox/use-instabox-host-sync'
 import { getProvenCachedWorktrees } from '../cache/worktree-cache'
 import { ActionSheetModal } from '../components/ActionSheetModal'
 import { ConfirmModal } from '../components/ConfirmModal'
@@ -21,7 +27,6 @@ import {
 } from '../transport/client-context'
 import { hostEndpointLabel } from '../transport/host-endpoint-label'
 import { resolveHomeHostConnectionState } from '../transport/home-host-auto-connect'
-import { removeHostAndCloseClient } from '../transport/host-removal-lifecycle'
 import { loadHostCatalog } from '../transport/host-store'
 import type { HostCatalogEntry, HostProfile } from '../transport/types'
 import { useOpenMobileHostEdit } from '../transport/use-open-mobile-host-edit'
@@ -46,6 +51,7 @@ export function MobileHomeScreen() {
   const forceReconnectHost = useForceReconnect()
   const [actionTarget, setActionTarget] = useState<HostProfile | null>(null)
   const [confirmRemove, setConfirmRemove] = useState<{ id: string; name: string } | null>(null)
+  useInstaboxHostSync(() => void loadHostCatalog().then(data.setHostCatalog))
 
   const openResume = useCallback(
     (card: HomeResumeCard) => {
@@ -102,12 +108,15 @@ export function MobileHomeScreen() {
     }
     const host = confirmRemove
     try {
-      await removeHostAndCloseClient(host.id, forgetHostClient)
+      await removeHostEverywhere(host.id, forgetHostClient)
       setConfirmRemove(null)
       data.setHostCatalog(await loadHostCatalog())
-    } catch {
+    } catch (error) {
       setConfirmRemove(host)
-      Alert.alert('Could not remove host', 'Please try again.')
+      Alert.alert(
+        'Could not remove host',
+        removeHostErrorMessage(host.id, error, 'Please try again.')
+      )
     }
   }
 
@@ -185,9 +194,7 @@ export function MobileHomeScreen() {
       />
       <ConfirmModal
         visible={confirmRemove != null}
-        title="Remove Host"
-        message={`Remove "${confirmRemove?.name}"? You can re-pair later.`}
-        confirmLabel="Remove"
+        {...removeHostConfirmCopy(confirmRemove?.id, confirmRemove?.name)}
         destructive
         onConfirm={() => void handleRemove()}
         onCancel={() => setConfirmRemove(null)}

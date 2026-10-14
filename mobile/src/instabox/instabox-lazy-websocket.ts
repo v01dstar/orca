@@ -2,6 +2,8 @@
 // for one socket, so each socket resolves a fresh one before dialing. React Native cannot run the
 // desktop's loopback proxy, so this stands in for the WebSocket the transport constructs.
 
+import { reportIfInstaboxMachineGone } from './instabox-machine-gone'
+
 export const INSTABOX_ENDPOINT_SCHEME = 'instabox:'
 
 export function instaboxEndpointFor(serverUrl: string, machineId: string): string {
@@ -71,6 +73,7 @@ class InstaboxLazyWebSocket {
       await loadInstaboxSession()
       endpoint = (await instaboxClient().createOrcaConnection(machineId, 'mobile')).endpoint
     } catch (error) {
+      reportIfInstaboxMachineGone(machineId, error)
       if (!this.closedEarly) {
         this.closedEarly = true
         const message = error instanceof Error ? error.message : 'Instabox unavailable'

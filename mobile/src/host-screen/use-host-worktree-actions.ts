@@ -3,7 +3,7 @@ import type { useRouter } from 'expo-router'
 import { floatingWorkspaceSessionPath } from '../session/floating-workspace'
 import { savePinnedIds } from '../storage/preferences'
 import type { useForgetHostClient } from '../transport/client-context'
-import { removeHostAndCloseClient } from '../transport/host-removal-lifecycle'
+import { removeHostErrorMessage, removeHostEverywhere } from '../instabox/instabox-host-sync'
 import { isPageHostRemovalUnavailable } from '../transport/page-host-removal-refusal'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
@@ -147,7 +147,7 @@ export function useHostWorktreeActions(args: {
       return
     }
     try {
-      await removeHostAndCloseClient(hostId, forgetHostClient)
+      await removeHostEverywhere(hostId, forgetHostClient)
       leaveHost()
     } catch (error) {
       if (isPageHostRemovalUnavailable(error)) {
@@ -162,7 +162,9 @@ export function useHostWorktreeActions(args: {
       // this failure had no surface at all. And not the identity error either: that one is an
       // early return over the whole screen with nothing to dismiss it, so a removal that failed
       // once would cost the list, the header and the confirm this line is asking to re-open.
-      setActionError('Could not remove host. Please try again.')
+      setActionError(
+        removeHostErrorMessage(hostId, error, 'Could not remove host. Please try again.')
+      )
     }
   }, [hostId, leaveHost, forgetHostClient, setActionError, setConfirmRemoveHost])
 

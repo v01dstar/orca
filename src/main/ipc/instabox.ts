@@ -10,6 +10,7 @@ import {
   type InstaboxMachineAction,
   type InstaboxTemplate
 } from '../../shared/instabox/instabox-api-types'
+import { InstaboxApiError } from '../../shared/instabox/instabox-api-client'
 import {
   INSTABOX_ENVIRONMENTS_CHANGED_CHANNEL,
   INSTABOX_STATE_CHANGED_CHANNEL,
@@ -169,6 +170,27 @@ export async function registerInstaboxHandlers(store: Store): Promise<void> {
     await client.waitForOperation(await client.deleteMachine(args.machineId))
     envs.forget(args.machineId)
   })
+
+  ipcMain.removeHandler('instabox:deleteEnvironmentMachine')
+  ipcMain.handle(
+    'instabox:deleteEnvironmentMachine',
+    async (_event, args: { environmentId: string }) => {
+      const link = envs.links().find((entry) => entry.environmentId === args.environmentId)
+      if (!link) {
+        throw new Error('This server is not an Instabox machine.')
+      }
+      const client = account.client()
+      await client
+        .waitForOperation(await client.deleteMachine(link.machineId))
+        .catch((error: unknown) => {
+          // Why: already deleted elsewhere is the outcome asked for.
+          if (!(error instanceof InstaboxApiError && error.status === 404)) {
+            throw error
+          }
+        })
+      envs.forget(link.machineId)
+    }
+  )
 
   ipcMain.removeHandler('instabox:connectMachine')
   ipcMain.handle('instabox:connectMachine', async (_event, args: { machineId: string }) =>

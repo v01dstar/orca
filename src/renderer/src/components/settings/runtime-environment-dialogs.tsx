@@ -73,6 +73,8 @@ export function RuntimeEnvironmentSwitchDialog({
   )
 }
 
+const INSTABOX_DELETE_NS = 'auto.components.settings.instabox.InstaboxDeleteMachineDialog'
+
 export function RuntimeEnvironmentRemoveDialog({
   pendingRemove,
   removingId,
@@ -90,15 +92,19 @@ export function RuntimeEnvironmentRemoveDialog({
   onCancel: () => void
   onConfirm: () => void
 }): React.JSX.Element {
+  // Fork: an instabox server is its machine; removing it deletes the machine.
+  const deletesMachine = pendingRemove?.source === 'instabox'
   return (
     <Dialog open={pendingRemove !== null} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-sm sm:max-w-sm" showCloseButton={false}>
         <DialogHeader>
           <DialogTitle className="text-sm">
-            {translate(
-              'auto.components.settings.RuntimeEnvironmentsPane.bb90dd6487',
-              'Remove Server'
-            )}
+            {deletesMachine
+              ? translate(`${INSTABOX_DELETE_NS}.title`, 'Delete Instabox machine?')
+              : translate(
+                  'auto.components.settings.RuntimeEnvironmentsPane.bb90dd6487',
+                  'Remove Server'
+                )}
           </DialogTitle>
           <DialogDescription>
             {removingActiveServer
@@ -106,10 +112,15 @@ export function RuntimeEnvironmentRemoveDialog({
                   'auto.components.settings.RuntimeEnvironmentsPane.removeActiveServerDescription',
                   'This server is the default host for new projects. Choose another one in Advanced before removing it. Existing host sessions are left alone.'
                 )
-              : translate(
-                  'auto.components.settings.RuntimeEnvironmentsPane.ed3e3f069d',
-                  'This removes the saved server from Orca. It does not change the default host for new projects.'
-                )}
+              : deletesMachine
+                ? translate(
+                    `${INSTABOX_DELETE_NS}.description`,
+                    'Deletes the machine with its root and /data disks, and every workspace on it. This cannot be undone.'
+                  )
+                : translate(
+                    'auto.components.settings.RuntimeEnvironmentsPane.ed3e3f069d',
+                    'This removes the saved server from Orca. It does not change the default host for new projects.'
+                  )}
           </DialogDescription>
         </DialogHeader>
         {pendingRemove ? (
@@ -131,7 +142,9 @@ export function RuntimeEnvironmentRemoveDialog({
           </Button>
           <Button variant="destructive" onClick={onConfirm} disabled={removingId !== null}>
             {removingId !== null ? <Loader2 className="animate-spin" /> : <Trash2 />}
-            {translate('auto.components.settings.RuntimeEnvironmentsPane.d25f0688b1', 'Remove')}
+            {deletesMachine
+              ? translate(`${INSTABOX_DELETE_NS}.confirm`, 'Delete machine')
+              : translate('auto.components.settings.RuntimeEnvironmentsPane.d25f0688b1', 'Remove')}
           </Button>
         </DialogFooter>
       </DialogContent>

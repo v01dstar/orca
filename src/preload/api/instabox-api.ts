@@ -23,6 +23,8 @@ export type InstaboxApi = {
   // Running or stopped; saves its root disk and /data (not RAM).
   saveSnapshot: (args: { machineId: string; name: string }) => Promise<InstaboxSnapshot>
   deleteMachine: (args: { machineId: string }) => Promise<void>
+  // Removing an instabox server deletes its machine: the server is the source of truth.
+  deleteEnvironmentMachine: (args: { environmentId: string }) => Promise<void>
   connectMachine: (args: { machineId: string }) => Promise<PublicKnownRuntimeEnvironment>
   onStateChanged: (callback: (state: InstaboxAccountState) => void) => () => void
   onEnvironmentsChanged: (callback: () => void) => () => void

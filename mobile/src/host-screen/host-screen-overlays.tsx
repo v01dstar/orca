@@ -16,6 +16,7 @@ import {
   WORKSPACE_VIEW_SHARED_NOTE
 } from '../worktree/workspace-list-picker-options'
 import { isWorktreePinned } from '../worktree/workspace-list-sections'
+import { removeHostConfirmCopy } from '../instabox/instabox-host-sync'
 import { hostScreenStyles as styles } from './host-screen-styles'
 import type { HostScreenController } from './use-host-screen-controller'
 
@@ -207,9 +208,7 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
       {/* Host remove confirmation */}
       <ConfirmModal
         visible={state.confirmRemoveHost}
-        title="Remove Host"
-        message={`Remove "${state.hostName}"? You can re-pair later.`}
-        confirmLabel="Remove"
+        {...removeHostConfirmCopy(hostId, state.hostName)}
         destructive
         onConfirm={() => void actions.handleRemoveHost()}
         onCancel={() => state.setConfirmRemoveHost(false)}

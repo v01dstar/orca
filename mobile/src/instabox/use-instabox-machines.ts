@@ -15,6 +15,7 @@ import { useForgetHostClient } from '../transport/client-context'
 import { removeHostAndCloseClient } from '../transport/host-removal-lifecycle'
 import { loadHosts } from '../transport/host-store'
 import { addInstaboxMachineAsHost } from './instabox-host-enrollment'
+import { claimInstaboxAutoAdd, instaboxHostIdFor, staleInstaboxHosts } from './instabox-host-sync'
 import { addNewInstaboxMachineAsHost } from './instabox-new-machine-enrollment'
 import {
   instaboxClient,
@@ -47,7 +48,8 @@ export function useInstaboxMachines() {
   const forgetHostClient = useForgetHostClient()
 
   const refresh = useCallback(async () => {
-    if (!(await loadInstaboxSession())) {
+    const current = await loadInstaboxSession()
+    if (!current) {
       setMachines([])
       return
     }
@@ -60,13 +62,18 @@ export function useInstaboxMachines() {
         client.listSnapshots(),
         loadHosts()
       ])
-      const hostIds = new Set(hosts.map((host) => host.id))
+      // Why: the server is the source of truth; a machine deleted elsewhere takes its host along.
+      const stale = staleInstaboxHosts(hosts, current.serverUrl, new Set(list.map((m) => m.id)))
+      for (const host of stale) {
+        await removeHostAndCloseClient(host.id, forgetHostClient)
+      }
+      const hostIds = new Set(hosts.filter((host) => !stale.includes(host)).map((host) => host.id))
       setTemplates(nextTemplates)
       setSnapshots(instaboxOrcaSnapshots(nextSnapshots, nextTemplates))
       setMachines(
         instaboxOrcaMachines(list, nextTemplates).map((machine) => ({
           machine,
-          hostId: hostIds.has(`instabox-${machine.id}`) ? `instabox-${machine.id}` : null
+          hostId: hostIds.has(instaboxHostIdFor(machine.id)) ? instaboxHostIdFor(machine.id) : null
         }))
       )
       setError(null)
@@ -75,7 +82,7 @@ export function useInstaboxMachines() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [forgetHostClient])
 
   useEffect(() => {
     void loadInstaboxSession().then(setSession)
@@ -101,6 +108,15 @@ export function useInstaboxMachines() {
       setDeviceCode(null)
     }
   }
+
+  // Why: every running Orca machine on the server is a host here.
+  useEffect(() => {
+    for (const { machine, hostId } of machines) {
+      if (machine.state === 'running' && !hostId && claimInstaboxAutoAdd(machine.id)) {
+        void run(machine.id, 'Adding to Orca…', () => addInstaboxMachineAsHost(machine))
+      }
+    }
+  }, [machines])
 
   const run = async (machineId: string, label: string, task: () => Promise<unknown>) => {
     setBusy((current) => ({ ...current, [machineId]: label }))
@@ -145,6 +161,8 @@ export function useInstaboxMachines() {
             ? { name, snapshotId: source.snapshotId }
             : { name, templateId: source.templateId }
         const operation = await client.waitForOperation(await client.createMachine(request))
+        // Claimed before the refresh below, so the running-machine sweep does not add it twice.
+        claimInstaboxAutoAdd(operation.machineId)
         created.machineId = operation.machineId
       })
       const id = created.machineId

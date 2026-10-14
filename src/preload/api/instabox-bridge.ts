@@ -15,6 +15,7 @@ export const instaboxApi: InstaboxApi = {
   machineAction: (args) => ipcRenderer.invoke('instabox:machineAction', args),
   saveSnapshot: (args) => ipcRenderer.invoke('instabox:saveSnapshot', args),
   deleteMachine: (args) => ipcRenderer.invoke('instabox:deleteMachine', args),
+  deleteEnvironmentMachine: (args) => ipcRenderer.invoke('instabox:deleteEnvironmentMachine', args),
   connectMachine: (args) => ipcRenderer.invoke('instabox:connectMachine', args),
   onStateChanged: (callback) => {
     const listener = (_event: Electron.IpcRendererEvent, state: InstaboxAccountState): void =>

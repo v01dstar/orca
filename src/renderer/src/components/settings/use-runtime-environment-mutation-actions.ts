@@ -149,7 +149,10 @@ export function useRuntimeEnvironmentMutationActions({
         }
         return false
       }
-      await window.api.runtimeEnvironments.remove({ selector: environment.id })
+      // Why (fork): an instabox server is its machine, so removing it deletes the machine.
+      await (environment.source === 'instabox' && 'instabox' in window.api
+        ? window.api.instabox.deleteEnvironmentMachine({ environmentId: environment.id })
+        : window.api.runtimeEnvironments.remove({ selector: environment.id }))
       await loadEnvironments()
       if (mountedRef.current) {
         toast.success(
