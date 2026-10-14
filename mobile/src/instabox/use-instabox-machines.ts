@@ -15,6 +15,7 @@ import { useForgetHostClient } from '../transport/client-context'
 import { removeHostAndCloseClient } from '../transport/host-removal-lifecycle'
 import { loadHosts } from '../transport/host-store'
 import { addInstaboxMachineAsHost } from './instabox-host-enrollment'
+import { addNewInstaboxMachineAsHost } from './instabox-new-machine-enrollment'
 import {
   instaboxClient,
   loadInstaboxSession,
@@ -134,15 +135,27 @@ export function useInstaboxMachines() {
       }),
     addToOrca: (machine: InstaboxMachine) =>
       run(machine.id, 'Adding to Orca…', () => addInstaboxMachineAsHost(machine)),
-    create: (name: string, source: InstaboxMachineSource) =>
-      run(`new:${name}`, 'Creating…', async () => {
+    // Resolves once created; adding to Orca continues on the machine's row.
+    create: async (name: string, source: InstaboxMachineSource) => {
+      const created: { machineId?: string } = {}
+      await run(`new:${name}`, 'Creating…', async () => {
         const client = instaboxClient()
         const request: InstaboxCreateMachineRequest =
           'snapshotId' in source
             ? { name, snapshotId: source.snapshotId }
             : { name, templateId: source.templateId }
-        await client.waitForOperation(await client.createMachine(request))
-      }),
+        const operation = await client.waitForOperation(await client.createMachine(request))
+        created.machineId = operation.machineId
+      })
+      const id = created.machineId
+      if (id) {
+        void run(id, 'Adding to Orca…', () =>
+          addNewInstaboxMachineAsHost(id).catch((e: unknown) => {
+            throw new Error(`${name} was created but not added to Orca: ${message(e)}`)
+          })
+        )
+      }
+    },
     // Forget the Orca host first, while the machine can still answer its push unregister.
     deleteMachine: (machine: InstaboxMachine, hostId: string | null) =>
       run(machine.id, 'Deleting…', async () => {
