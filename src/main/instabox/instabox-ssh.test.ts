@@ -39,7 +39,7 @@ describe('prepareInstaboxSsh', () => {
     expect((await stat(join(dir, 'id_ed25519'))).mode & 0o777).toBe(0o600)
     expect(await readFile(join(dir, 'm1-cert.pub'), 'utf8')).toBe(`${grant().certificate}\n`)
     // The temp dir has a space, so paths arrive single-quoted.
-    expect(command).toContain(`'CertificateFile=${join(dir, 'm1-cert.pub')}'`)
+    expect(command).toContain(`'CertificateFile="${join(dir, 'm1-cert.pub')}"'`)
     expect(command).toMatch(/^ssh -p 2222 -i '.+id_ed25519' -o IdentitiesOnly=yes /)
     expect(command.endsWith(' m1@ssh.instabox.sh')).toBe(true)
   })

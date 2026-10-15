@@ -60,6 +60,11 @@ function shellQuote(value: string): string {
   return /^[\w@%+=:,./-]+$/.test(value) ? value : `'${value.replace(/'/g, `'\\''`)}'`
 }
 
+// Why: ssh splits an -o value at whitespace, so a path (Application Support) must be quoted in it.
+function sshOption(key: string, path: string): string {
+  return `${key}="${path}"`
+}
+
 export function instaboxSshArgs(
   paths: InstaboxSshPaths,
   machineId: string,
@@ -74,9 +79,9 @@ export function instaboxSshArgs(
     '-o',
     'IdentitiesOnly=yes',
     '-o',
-    `CertificateFile=${paths.cert(machineId)}`,
+    sshOption('CertificateFile', paths.cert(machineId)),
     '-o',
-    `UserKnownHostsFile=${paths.knownHosts}`,
+    sshOption('UserKnownHostsFile', paths.knownHosts),
     '-o',
     'StrictHostKeyChecking=yes',
     '-o',
