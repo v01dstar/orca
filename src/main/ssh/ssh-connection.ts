@@ -82,6 +82,7 @@ import { SshReconnectLadder } from './ssh-reconnect-ladder'
 import { mayUserSshConfigClaimAlias } from './ssh-config-alias-claim'
 import { getPassphrasePrivateKeyPath } from './ssh-private-key-authentication'
 import {
+  requiresSystemSshForCertificate,
   requiresSystemSshForSecurityKey,
   shouldUseSystemSshTransport
 } from './ssh-transport-selection'
@@ -567,13 +568,14 @@ export class SshConnection {
     )
     this.hostKeyResolvedConfig = resolved
     const usesConfiguredSystemTransport = shouldUseSystemSshTransport(this.target, resolved)
-    const requiresSecurityKeyTransport = usesConfiguredSystemTransport
+    const requiresIdentityTransport = usesConfiguredSystemTransport
       ? false
-      : await requiresSystemSshForSecurityKey(this.target, resolved)
+      : (await requiresSystemSshForSecurityKey(this.target, resolved)) ||
+        (await requiresSystemSshForCertificate(this.target, resolved))
     if (!this.isCurrentConnectAttempt(connectGeneration)) {
       throw createCancelledConnectAttemptError()
     }
-    if (usesConfiguredSystemTransport || requiresSecurityKeyTransport) {
+    if (usesConfiguredSystemTransport || requiresIdentityTransport) {
       await this.doSystemSshProbeWithControlMasterRetry(connectGeneration, resolved)
       return
     }

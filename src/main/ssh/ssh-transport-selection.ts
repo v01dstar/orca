@@ -90,6 +90,31 @@ export function shouldUseSystemSshTransport(
   )
 }
 
+async function isFile(path: string): Promise<boolean> {
+  return stat(resolveSshConfigHomePath(path)).then(
+    (stats) => stats.isFile(),
+    () => false
+  )
+}
+
+/** ssh2 cannot present OpenSSH user certificates, so a target that has one must use OpenSSH. */
+export async function requiresSystemSshForCertificate(
+  target: SshTarget,
+  resolved: Pick<SshResolvedConfig, 'identityFile' | 'certificateFile'> | null
+): Promise<boolean> {
+  // Why: OpenSSH also loads `<key>-cert.pub` beside each identity without any CertificateFile.
+  const candidates = [
+    ...(resolved?.certificateFile ?? []),
+    ...resolveIdentityFilePaths(target, resolved).map((keyPath) => `${keyPath}-cert.pub`)
+  ]
+  for (const certPath of candidates) {
+    if (await isFile(certPath)) {
+      return findSystemSsh() !== null
+    }
+  }
+  return false
+}
+
 export async function requiresSystemSshForSecurityKey(
   target: SshTarget,
   resolved: Pick<SshResolvedConfig, 'identityFile'> | null

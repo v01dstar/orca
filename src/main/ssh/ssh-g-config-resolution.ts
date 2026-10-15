@@ -10,6 +10,7 @@ export type SshResolvedConfig = {
   user?: string
   port: number
   identityFile: string[]
+  certificateFile?: string[]
   identityAgent?: string
   identitiesOnly: boolean
   forwardAgent: boolean
@@ -271,6 +272,7 @@ export async function resolveWithSshG(host: string): Promise<SshResolvedConfig |
 export function parseSshGOutput(stdout: string): SshResolvedConfig {
   const map = new Map<string, string>()
   const identityFiles: string[] = []
+  const certificateFiles: string[] = []
 
   for (const line of stdout.split('\n')) {
     const spaceIdx = line.indexOf(' ')
@@ -281,12 +283,14 @@ export function parseSshGOutput(stdout: string): SshResolvedConfig {
     const value = line.substring(spaceIdx + 1).trim()
     if (key === 'identityfile') {
       identityFiles.push(resolveSshConfigHomePath(value))
+    } else if (key === 'certificatefile') {
+      certificateFiles.push(resolveSshConfigHomePath(value))
     } else {
       map.set(key, value)
     }
   }
 
-  return buildSshResolvedConfig(map, identityFiles)
+  return buildSshResolvedConfig(map, identityFiles, certificateFiles)
 }
 
 /**
@@ -326,7 +330,8 @@ function parseKnownHostsFileList(value: string | undefined): string[] {
 
 function buildSshResolvedConfig(
   map: Map<string, string>,
-  identityFiles: string[]
+  identityFiles: string[],
+  certificateFiles: string[]
 ): SshResolvedConfig {
   // Why: `ssh -G` outputs `proxycommand none` / `proxyjump none` when no
   // proxy is configured. Treating "none" as real would spawn bad commands.
@@ -347,6 +352,7 @@ function buildSshResolvedConfig(
     user: map.get('user') || undefined,
     port: Number.parseInt(map.get('port') ?? '22', 10),
     identityFile: identityFiles,
+    certificateFile: certificateFiles,
     identityAgent,
     identitiesOnly: map.get('identitiesonly') === 'yes',
     forwardAgent: map.get('forwardagent') === 'yes',
