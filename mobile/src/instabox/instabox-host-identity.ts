@@ -33,3 +33,25 @@ export function removeHostConfirmCopy(
 export function removeHostErrorMessage(hostId: string, error: unknown, fallback: string): string {
   return machineIdOfHost(hostId) && error instanceof Error ? error.message : fallback
 }
+
+// Set by instabox-host-sync when it loads (the home screen loads it at startup), so host screens
+// can delete a machine without importing the session's native modules.
+let deleteInstaboxMachine: ((machineId: string) => Promise<void>) | null = null
+
+export function registerInstaboxMachineDeleter(
+  deleter: (machineId: string) => Promise<void>
+): void {
+  deleteInstaboxMachine = deleter
+}
+
+/** Deletes the machine behind an Instabox host on the server; other hosts have none. */
+export async function deleteMachineBehindHost(hostId: string): Promise<void> {
+  const machineId = machineIdOfHost(hostId)
+  if (!machineId) {
+    return
+  }
+  if (!deleteInstaboxMachine) {
+    throw new Error('Instabox is not available.')
+  }
+  await deleteInstaboxMachine(machineId)
+}

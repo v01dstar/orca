@@ -2,11 +2,8 @@ import { useCallback, useState } from 'react'
 import { Alert, StyleSheet } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useOpenMobileAccounts } from '../accounts/use-open-mobile-accounts'
-import {
-  removeHostConfirmCopy,
-  removeHostErrorMessage,
-  removeHostEverywhere
-} from '../instabox/instabox-host-sync'
+import { removeHostConfirmCopy, removeHostErrorMessage } from '../instabox/instabox-host-identity'
+import { removeHostEverywhere } from '../instabox/instabox-host-removal'
 import { useInstaboxHostSync } from '../instabox/use-instabox-host-sync'
 import { getProvenCachedWorktrees } from '../cache/worktree-cache'
 import { ActionSheetModal } from '../components/ActionSheetModal'

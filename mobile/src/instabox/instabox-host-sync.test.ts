@@ -32,8 +32,10 @@ vi.mock('../transport/host-removal-lifecycle', () => ({
 vi.mock('../transport/host-store', () => ({ loadHosts: async () => mocks.hosts }))
 vi.mock('./instabox-host-enrollment', () => ({ addInstaboxMachineAsHost: mocks.enroll }))
 
-const { removeHostConfirmCopy, removeHostEverywhere, staleInstaboxHosts, syncInstaboxHosts } =
-  await import('./instabox-host-sync')
+// Loading host sync registers the machine deleter that host removal uses.
+const { staleInstaboxHosts, syncInstaboxHosts } = await import('./instabox-host-sync')
+const { removeHostEverywhere } = await import('./instabox-host-removal')
+const { removeHostConfirmCopy } = await import('./instabox-host-identity')
 
 function host(id: string, endpoint: string): HostProfile {
   return { id, name: id, endpoint, deviceToken: 't', publicKeyB64: 'k', lastConnected: 0 }

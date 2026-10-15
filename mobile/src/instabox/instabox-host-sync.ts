@@ -8,41 +8,31 @@ import {
 } from '../../../src/shared/instabox/instabox-api-types'
 import { removeHostAndCloseClient } from '../transport/host-removal-lifecycle'
 import type { HostProfile } from '../transport/types'
-import { instaboxHostIdFor, machineIdOfHost } from './instabox-host-identity'
-import { INSTABOX_ENDPOINT_SCHEME, instaboxMachineIdOf } from './instabox-lazy-websocket'
-
-// Why dynamic (here and below): these pull in native modules; host screens import this file.
-const sessionModule = () => import('./instabox-mobile-session')
-
-export {
+import { loadHosts } from '../transport/host-store'
+import { addInstaboxMachineAsHost } from './instabox-host-enrollment'
+import {
   instaboxHostIdFor,
-  removeHostConfirmCopy,
-  removeHostErrorMessage
+  machineIdOfHost,
+  registerInstaboxMachineDeleter
 } from './instabox-host-identity'
+import { INSTABOX_ENDPOINT_SCHEME, instaboxMachineIdOf } from './instabox-lazy-websocket'
+import { instaboxClient, loadInstaboxSession } from './instabox-mobile-session'
 
-/** Removes a host; an Instabox host's machine is deleted on the server first. */
-export async function removeHostEverywhere(
-  hostId: string,
-  forgetHostClient: (hostId: string) => void
-): Promise<void> {
-  const machineId = machineIdOfHost(hostId)
-  if (machineId) {
-    const { instaboxClient, loadInstaboxSession } = await sessionModule()
-    if (!(await loadInstaboxSession())) {
-      throw new Error('Sign in to Instabox to delete this machine.')
-    }
-    // Why first: if the server refuses, the host stays, so nothing claims a deletion that did not happen.
-    await instaboxClient()
-      .deleteMachine(machineId)
-      .catch((error: unknown) => {
-        // Already deleted elsewhere is the outcome asked for.
-        if (!(error instanceof InstaboxApiError && error.status === 404)) {
-          throw error
-        }
-      })
+export { instaboxHostIdFor } from './instabox-host-identity'
+
+registerInstaboxMachineDeleter(async (machineId) => {
+  if (!(await loadInstaboxSession())) {
+    throw new Error('Sign in to Instabox to delete this machine.')
   }
-  await removeHostAndCloseClient(hostId, forgetHostClient)
-}
+  await instaboxClient()
+    .deleteMachine(machineId)
+    .catch((error: unknown) => {
+      // Already deleted elsewhere is the outcome asked for.
+      if (!(error instanceof InstaboxApiError && error.status === 404)) {
+        throw error
+      }
+    })
+})
 
 /** Instabox hosts on this server whose machine the server no longer lists. */
 export function staleInstaboxHosts(
@@ -82,13 +72,10 @@ export function claimInstaboxAutoAdd(machineId: string): boolean {
 export async function syncInstaboxHosts(
   forgetHostClient: (hostId: string) => void
 ): Promise<boolean> {
-  const { instaboxClient, loadInstaboxSession } = await sessionModule()
   const session = await loadInstaboxSession()
   if (!session) {
     return false
   }
-  const { addInstaboxMachineAsHost } = await import('./instabox-host-enrollment')
-  const { loadHosts } = await import('../transport/host-store')
   const client = instaboxClient()
   const [machines, templates, hosts] = await Promise.all([
     client.listMachines(),
