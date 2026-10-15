@@ -26,6 +26,8 @@ export type InstaboxApi = {
   // Removing an instabox server deletes its machine: the server is the source of truth.
   deleteEnvironmentMachine: (args: { environmentId: string }) => Promise<void>
   connectMachine: (args: { machineId: string }) => Promise<PublicKnownRuntimeEnvironment>
+  // A shell command that SSHes into the machine with a freshly minted certificate.
+  sshCommand: (args: { machineId: string }) => Promise<string>
   onStateChanged: (callback: (state: InstaboxAccountState) => void) => () => void
   onEnvironmentsChanged: (callback: () => void) => () => void
 }

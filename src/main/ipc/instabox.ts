@@ -1,4 +1,5 @@
 // IPC for instabox (fork): account, machines, and their Orca environments.
+import { join } from 'node:path'
 import { app, BrowserWindow, ipcMain } from 'electron'
 import {
   instaboxOrcaMachines,
@@ -19,6 +20,7 @@ import {
 import { redactRuntimeEnvironment } from '../../shared/runtime-environments'
 import { InstaboxAccount } from '../instabox/instabox-account'
 import { InstaboxEnvironments } from '../instabox/instabox-environments'
+import { prepareInstaboxSsh } from '../instabox/instabox-ssh'
 import { InstaboxTunnelProxy } from '../instabox/instabox-tunnel-proxy'
 import type { Store } from '../persistence'
 import { retireRemovedRuntimeEnvironment } from './runtime-environment-removal-cleanup'
@@ -196,4 +198,12 @@ export async function registerInstaboxHandlers(store: Store): Promise<void> {
   ipcMain.handle('instabox:connectMachine', async (_event, args: { machineId: string }) =>
     redactRuntimeEnvironment(await envs.connect(args.machineId))
   )
+
+  ipcMain.removeHandler('instabox:sshCommand')
+  ipcMain.handle('instabox:sshCommand', (_event, args: { machineId: string }) => {
+    const client = account.client()
+    return prepareInstaboxSsh(join(userDataPath, 'instabox-ssh'), args.machineId, (publicKey) =>
+      client.createSshConnection(args.machineId, publicKey)
+    )
+  })
 }

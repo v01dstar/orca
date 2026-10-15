@@ -111,6 +111,17 @@ export const InstaboxOrcaConnectionSchema = z.object({
 })
 export type InstaboxOrcaConnection = z.infer<typeof InstaboxOrcaConnectionSchema>
 
+// A short-lived SSH user certificate; the gateway accepts nothing else.
+export const InstaboxSshConnectionSchema = z.object({
+  host: z.string().min(1),
+  port: z.number().int().nonnegative(),
+  username: z.string(),
+  certificate: z.string().min(1),
+  expiresAt: z.string(),
+  hostTrust: z.object({ publicKey: z.string().min(1) })
+})
+export type InstaboxSshConnection = z.infer<typeof InstaboxSshConnectionSchema>
+
 export const INSTABOX_ORCA_CAPABILITY = 'orca'
 export type InstaboxMachineAction = 'start' | 'stop' | 'suspend' | 'resume'
 

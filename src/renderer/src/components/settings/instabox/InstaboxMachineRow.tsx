@@ -1,4 +1,4 @@
-import { Loader2, MoreHorizontal } from 'lucide-react'
+import { Loader2, MoreHorizontal, SquareTerminal } from 'lucide-react'
 import {
   canSaveInstaboxSnapshot,
   instaboxMachineActions,
@@ -51,6 +51,8 @@ function busyLabel(busy: InstaboxMachineBusy): string {
       return translate(`${NS}.connecting`, 'Connecting…')
     case 'saveSnapshot':
       return translate(`${NS}.savingSnapshot`, 'Saving snapshot…')
+    case 'ssh':
+      return translate(`${NS}.openingSsh`, 'Opening SSH…')
   }
 }
 
@@ -60,6 +62,8 @@ type InstaboxMachineRowProps = {
   disabled: boolean
   onAction: (action: InstaboxMachineAction) => void
   onConnect: () => void
+  // Absent where no terminal can open (settings in the web client).
+  onSsh?: () => void
   onSaveSnapshot: () => void
   onDelete: () => void
 }
@@ -70,6 +74,7 @@ export function InstaboxMachineRow({
   disabled,
   onAction,
   onConnect,
+  onSsh,
   onSaveSnapshot,
   onDelete
 }: InstaboxMachineRowProps): React.JSX.Element {
@@ -113,6 +118,12 @@ export function InstaboxMachineRow({
       </div>
       <div className="flex shrink-0 items-center gap-1">
         {busy ? <Loader2 className="size-3.5 animate-spin text-muted-foreground" /> : null}
+        {running && onSsh && !busy ? (
+          <Button type="button" variant="outline" size="xs" onClick={onSsh} disabled={disabled}>
+            <SquareTerminal className="size-3" />
+            {translate(`${NS}.ssh`, 'SSH')}
+          </Button>
+        ) : null}
         {primary && !busy ? (
           <Button
             type="button"

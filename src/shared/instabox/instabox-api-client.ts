@@ -9,6 +9,7 @@ import {
   InstaboxMeSchema,
   InstaboxOperationSchema,
   InstaboxOrcaConnectionSchema,
+  InstaboxSshConnectionSchema,
   InstaboxTemplateSchema,
   InstaboxTokensSchema,
   type InstaboxCreateMachineRequest,
@@ -19,6 +20,7 @@ import {
   type InstaboxMe,
   type InstaboxOperation,
   type InstaboxOrcaConnection,
+  type InstaboxSshConnection,
   type InstaboxTemplate,
   type InstaboxTokens
 } from './instabox-api-types'
@@ -212,6 +214,11 @@ export function createInstaboxApiClient(options: InstaboxApiClientOptions) {
           body: { scope }
         }
       ),
+    createSshConnection: (id: string, publicKey: string): Promise<InstaboxSshConnection> =>
+      mutate(InstaboxSshConnectionSchema, `/v1/machines/${encodeURIComponent(id)}/connections`, {
+        method: 'POST',
+        body: { publicKey }
+      }),
     logout: async (): Promise<void> => {
       await request(z.unknown(), '/v1/auth/logout', { method: 'POST' })
     },

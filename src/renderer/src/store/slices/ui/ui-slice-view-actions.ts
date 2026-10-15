@@ -102,6 +102,16 @@ export function createUiViewActions(set: UISliceSet, get: UISliceGet): Partial<U
       set((state) => ({
         activeView: state.previousViewBeforeMobile
       })),
+    openInstaboxPage: () =>
+      set((state) => ({
+        activeView: 'instabox',
+        previousViewBeforeInstabox:
+          state.activeView === 'instabox' ? state.previousViewBeforeInstabox : state.activeView
+      })),
+    closeInstaboxPage: () =>
+      set((state) => ({
+        activeView: state.previousViewBeforeInstabox
+      })),
     setNewWorkspaceDraft: (draft) => set({ newWorkspaceDraft: draft }),
     clearNewWorkspaceDraft: () => set({ newWorkspaceDraft: null })
   }

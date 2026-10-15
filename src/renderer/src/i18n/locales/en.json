@@ -5759,7 +5759,8 @@
           "fee535205b": "Tasks",
           "d599269755": "Hide from sidebar",
           "artifacts": "Artifacts",
-          "skills": "Skills"
+          "skills": "Skills",
+          "remoteServers": "Remote Servers"
         },
         "SidebarRepositoryFilterSection": {
           "d3a9c4cea1": "Clear",
@@ -12875,7 +12876,9 @@
             "reconnect": "Re-enroll in Orca",
             "delete": "Delete…",
             "savingSnapshot": "Saving snapshot…",
-            "saveSnapshot": "Save as snapshot…"
+            "saveSnapshot": "Save as snapshot…",
+            "openingSsh": "Opening SSH…",
+            "ssh": "SSH"
           },
           "InstaboxSaveSnapshotDialog": {
             "title": "Save machine as snapshot",
@@ -18125,6 +18128,13 @@
         "a62f9db53d": "Cancel",
         "c77189bc0c": "Update filter",
         "19af906d12": "Save filter"
+      },
+      "instabox": {
+        "InstaboxPage": {
+          "title": "Remote Servers",
+          "close": "Close Remote Servers",
+          "closeHint": "Close · Esc"
+        }
       }
     },
     "i18n": {

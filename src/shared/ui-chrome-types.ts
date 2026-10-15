@@ -127,3 +127,5 @@ export type TopLevelView =
   | 'skills'
   | 'artifacts'
   | 'mobile'
+  // Fork: Instabox machines.
+  | 'instabox'

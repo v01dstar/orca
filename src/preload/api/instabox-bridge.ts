@@ -17,6 +17,7 @@ export const instaboxApi: InstaboxApi = {
   deleteMachine: (args) => ipcRenderer.invoke('instabox:deleteMachine', args),
   deleteEnvironmentMachine: (args) => ipcRenderer.invoke('instabox:deleteEnvironmentMachine', args),
   connectMachine: (args) => ipcRenderer.invoke('instabox:connectMachine', args),
+  sshCommand: (args) => ipcRenderer.invoke('instabox:sshCommand', args),
   onStateChanged: (callback) => {
     const listener = (_event: Electron.IpcRendererEvent, state: InstaboxAccountState): void =>
       callback(state)

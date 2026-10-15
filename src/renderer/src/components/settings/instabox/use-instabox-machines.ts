@@ -10,9 +10,15 @@ import type {
 } from '../../../../../shared/instabox/instabox-ipc'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
+import { openInstaboxSshTerminal } from './open-instabox-ssh-terminal'
 
 // What a row is doing right now; drives its stage label (operations take seconds to a minute).
-export type InstaboxMachineBusy = InstaboxMachineAction | 'delete' | 'connect' | 'saveSnapshot'
+export type InstaboxMachineBusy =
+  | InstaboxMachineAction
+  | 'delete'
+  | 'connect'
+  | 'saveSnapshot'
+  | 'ssh'
 
 async function refreshRuntimeEnvironments(): Promise<void> {
   useAppStore.getState().setRuntimeEnvironments(await window.api.runtimeEnvironments.list())
@@ -145,7 +151,9 @@ export function useInstaboxMachines(active: boolean) {
     deleteMachine: (machineId: string) =>
       runForMachine(machineId, 'delete', () => window.api.instabox.deleteMachine({ machineId })),
     connectMachine: (machineId: string) =>
-      runForMachine(machineId, 'connect', () => window.api.instabox.connectMachine({ machineId }))
+      runForMachine(machineId, 'connect', () => window.api.instabox.connectMachine({ machineId })),
+    openSsh: (machineId: string, name: string) =>
+      runForMachine(machineId, 'ssh', () => openInstaboxSshTerminal(machineId, name))
   }
 }
 

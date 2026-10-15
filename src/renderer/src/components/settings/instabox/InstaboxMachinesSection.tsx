@@ -104,6 +104,7 @@ function InstaboxMachinesPanel({ active }: { active: boolean }): React.JSX.Eleme
                   disabled={instabox.isLoading}
                   onAction={(action) => void instabox.machineAction(entry.machine.id, action)}
                   onConnect={() => void instabox.connectMachine(entry.machine.id)}
+                  onSsh={() => void instabox.openSsh(entry.machine.id, entry.machine.name)}
                   onSaveSnapshot={() => setPendingSnapshot(entry)}
                   onDelete={() => setPendingDelete(entry)}
                 />
