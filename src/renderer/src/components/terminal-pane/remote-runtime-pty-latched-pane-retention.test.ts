@@ -131,7 +131,7 @@ describe('remote runtime pty latched-pane retention', () => {
   beforeEach(() => {
     vi.resetModules()
     vi.doUnmock('../../runtime/remote-runtime-terminal-multiplexer')
-    vi.doMock('@/runtime/web-runtime-session', () => ({
+    vi.doMock('@/runtime/web-runtime-session-snapshot', () => ({
       refreshWebRuntimeSessionTabsSnapshot: refreshSessionTabsSnapshot
     }))
     vi.clearAllMocks()

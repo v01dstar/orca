@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { activateWebRuntimeSessionTab, closeWebRuntimeSessionTab } from './web-runtime-session'
+import type * as TrackingDecisions from './web-session-tabs-sync/tracking-decisions'
+import {
+  activateWebRuntimeSessionTab,
+  closeWebRuntimeSessionTab
+} from './web-runtime-session-tab-lifecycle'
 import {
   peekWebSessionFocusIntent,
   resetWebSessionFocusIntentForTests
@@ -10,7 +14,7 @@ import {
   resetWebSessionCloseIntentForTests
 } from './web-session-close-intent'
 import { WEB_SESSION_TAB_RPC_TIMEOUT_MS } from './web-session-tab-rpc-timeout'
-import { toHostSessionTabId } from './web-terminal-surface-id'
+import { toHostSessionTabId } from '../../../shared/terminal-surface-id'
 import { ENVIRONMENT_ID, WORKTREE_ID, makeSnapshot } from './web-runtime-session-test-harness'
 import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
 
@@ -44,16 +48,25 @@ vi.mock('../store', () => ({
   }
 }))
 
-vi.mock('./web-session-tabs-sync', () => ({
+vi.mock('./web-session-tabs-sync/tracking-lifecycle', () => ({
   acceptReplayedWebSessionTabsSnapshot: mocks.acceptReplayedWebSessionTabsSnapshot,
-  applyWebSessionTabsSnapshot: mocks.applyWebSessionTabsSnapshot,
-  decideWebSessionTabsSnapshot: mocks.decideWebSessionTabsSnapshot,
-  getWebSessionTabsTrackingGeneration: mocks.getWebSessionTabsTrackingGeneration,
+  getWebSessionTabsTrackingGeneration: mocks.getWebSessionTabsTrackingGeneration
+}))
+vi.mock('./web-session-tabs-sync/snapshot-api', () => ({
+  applyWebSessionTabsSnapshot: mocks.applyWebSessionTabsSnapshot
+}))
+vi.mock('./web-session-tabs-sync/tracking-decisions', async (importOriginal) => ({
+  ...(await importOriginal<typeof TrackingDecisions>()),
+  decideWebSessionTabsSnapshot: mocks.decideWebSessionTabsSnapshot
+}))
+vi.mock('./web-session-tabs-sync/store-patch', () => ({
   applyWebSessionTabsStorePatch: (buildPatch: (state: unknown) => unknown) => {
     mocks.setState(buildPatch)
     // The production caller invokes the returned settle receipt.
     return () => {}
-  },
+  }
+}))
+vi.mock('./web-session-tabs-sync/tracking-mappings', () => ({
   resolveHostSessionTabIdForWebSessionTab: mocks.resolveHostSessionTabIdForWebSessionTab
 }))
 

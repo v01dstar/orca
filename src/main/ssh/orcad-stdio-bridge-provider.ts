@@ -6,7 +6,7 @@
  * Disconnects match the forward: a lost channel drops its socket and the listener stays, so the
  * tunnel's own reconnect logic decides, and a lost transport never reads as a dead server.
  */
-import { OrcadStdioBridgeUnavailableError } from './orcad-host-unavailable'
+import { OrcadStdioBridgeUnavailableError } from '../orcad/orcad-host-unavailable'
 import type { OrcadHostTransport } from './orcad-host-transport'
 import {
   checkOrcadStdioBridge,
@@ -24,25 +24,27 @@ import type {
   StartedPortForward
 } from './ssh-port-forward-provider'
 
-type OrcadStdioBridgeDependencies = {
+export type OrcadStdioBridgeDependencies = {
   resolveBridge: (conn: OrcadHostTransport, port: number) => Promise<OrcadStdioBridge>
   checkBridge: (conn: OrcadHostTransport, bridge: OrcadStdioBridge) => Promise<unknown>
   openChannel: (conn: OrcadHostTransport, bridge: OrcadStdioBridge) => Promise<RemoteCommandChannel>
 }
 
-const defaultDependencies: OrcadStdioBridgeDependencies = {
+export const ORCAD_STDIO_BRIDGE_DEPENDENCIES: OrcadStdioBridgeDependencies = {
   resolveBridge: resolveOrcadStdioBridge,
   checkBridge: checkOrcadStdioBridge,
   openChannel: openOrcadStdioBridgeChannel
 }
 
 export class OrcadStdioBridgePortForwardProvider implements SshPortForwardProvider {
-  constructor(private readonly dependencies: OrcadStdioBridgeDependencies = defaultDependencies) {}
+  constructor(
+    private readonly dependencies: OrcadStdioBridgeDependencies = ORCAD_STDIO_BRIDGE_DEPENDENCIES
+  ) {}
 
-  // Why not system SSH: each bridge socket would be its own `ssh` process (a fresh login, and
-  // perhaps a key prompt, when multiplexing is off), and its refusal can't be probed up front.
+  // System SSH runs each bridge socket as an exec over its ControlMaster, or as its own login
+  // when multiplexing is off; the transport only picks it once forwarding was refused.
   canHandle(conn: SshConnection): boolean {
-    return conn.getClient() !== null
+    return conn.getClient() !== null || conn.usesSystemSshTransport()
   }
 
   start(conn: SshConnection, options: PortForwardStartOptions): Promise<StartedPortForward> {
@@ -50,7 +52,8 @@ export class OrcadStdioBridgePortForwardProvider implements SshPortForwardProvid
   }
 }
 
-async function startOrcadStdioBridge(
+/** Transport-agnostic: any orcad host whose exec can run the bridge (SSH, a WSL distro). */
+export async function startOrcadStdioBridge(
   host: OrcadHostTransport,
   options: PortForwardStartOptions,
   deps: OrcadStdioBridgeDependencies

@@ -103,6 +103,42 @@ export interface RelayRuntimeObserver {
   recordClientAcceptAbandoned?(stage: RelayClientAcceptStage, elapsedMs: number): void
   recordClientAcceptCompleted?(sample: RelayClientAcceptSample): void
   recordControlRtt?(rttMs: number): void
+  recordHostPreAuth?(path: HostPreAuthPath, outcome: HostPreAuthOutcome, durationMs: number): void
+}
+
+// Which check decided a host hello: the cell's memory in reserve mode (a booking, a seat it
+// remembers, or a lease), the database assignment check, or neither (beforeCheck: draining,
+// idle cutover, a bad or late hello, the pool shed, or a check that threw).
+export type HostPreAuthPath = 'beforeCheck' | 'db' | 'reserve'
+// Abandoned: the host hung up before a decision, or before the cell could act on one.
+export type HostPreAuthOutcome = 'admitted' | 'refused' | 'abandoned'
+
+// Upper bounds in ms; the last bucket is unbounded. 450 is the step-5 t_preauth gate.
+const PRE_AUTH_BUCKET_BOUNDS_MS = [50, 100, 200, 300, 450, 700, 1_000, 2_000, 5_000] as const
+
+type PreAuthLatencyGroup = {
+  samplesMs: number[]
+  observed: number
+  maxMs: number
+  // Non-cumulative; one more slot than there are bounds, for the unbounded bucket.
+  bucketCounts: number[]
+}
+type PreAuthLatency = Record<HostPreAuthPath, Record<HostPreAuthOutcome, PreAuthLatencyGroup>>
+
+const emptyPreAuthLatencyGroup = (): PreAuthLatencyGroup => ({
+  samplesMs: [],
+  observed: 0,
+  maxMs: 0,
+  bucketCounts: Array.from({ length: PRE_AUTH_BUCKET_BOUNDS_MS.length + 1 }, () => 0)
+})
+
+const emptyPreAuthLatency = (): PreAuthLatency => {
+  const byOutcome = (): Record<HostPreAuthOutcome, PreAuthLatencyGroup> => ({
+    admitted: emptyPreAuthLatencyGroup(),
+    refused: emptyPreAuthLatencyGroup(),
+    abandoned: emptyPreAuthLatencyGroup()
+  })
+  return { beforeCheck: byOutcome(), db: byOutcome(), reserve: byOutcome() }
 }
 
 // Which serialized accept step the phone had already hung up behind.
@@ -170,11 +206,29 @@ type RelayMetricDeltas = {
   controlActivityRecoveries: number
   controlActivityRecoveryFailures: number
   hostHellosShed: number
+  preAuthLatency: PreAuthLatency
 }
 
 // A host chooses how often it answers a ping, so the process-wide window is a
 // reservoir: the heap cost of a flood is capped and the percentiles stay unbiased.
 export const CONTROL_RTT_RESERVOIR_LIMIT = 1024
+// Per path and outcome; a reconnect burst can put thousands of hellos in one window.
+export const PRE_AUTH_RESERVOIR_LIMIT = 1024
+
+// Algorithm R: every sample in the window keeps an equal chance of being kept.
+function keepInReservoir(
+  samples: number[],
+  observedBefore: number,
+  value: number,
+  limit: number
+): void {
+  if (samples.length < limit) {
+    samples.push(value)
+    return
+  }
+  const slot = Math.floor(Math.random() * (observedBefore + 1))
+  if (slot < limit) samples[slot] = value
+}
 
 type MetricWriter = (entry: Record<string, unknown>) => void
 
@@ -227,7 +281,8 @@ const emptyDeltas = (): RelayMetricDeltas => ({
   controlRenewalFlushRowsMax: 0,
   controlActivityRecoveries: 0,
   controlActivityRecoveryFailures: 0,
-  hostHellosShed: 0
+  hostHellosShed: 0,
+  preAuthLatency: emptyPreAuthLatency()
 })
 
 function ascending(values: number[]): number[] {
@@ -252,12 +307,18 @@ function roundMs(value: number): number {
 // enough of it, so the maximum is folded instead. The fold is also not
 // interchangeable with the sorted last element: it is seeded with zero, so an
 // all-negative or NaN window reads differently.
-function latencySummary(samples: number[]): { p50: number; p95: number; max: number } {
-  // One sorted copy serves both ranks.
+function latencySummary(samples: number[]): {
+  p50: number
+  p95: number
+  p99: number
+  max: number
+} {
+  // One sorted copy serves every rank.
   const sorted = samples.length === 0 ? samples : ascending(samples)
   return {
     p50: roundMs(nearestRank(sorted, 0.5)),
     p95: roundMs(nearestRank(sorted, 0.95)),
+    p99: roundMs(nearestRank(sorted, 0.99)),
     max: roundMs(samples.reduce((highest, sample) => Math.max(highest, sample), 0))
   }
 }
@@ -433,15 +494,23 @@ export class RelayObservability implements RelayRuntimeObserver {
   }
 
   recordControlRtt(rttMs: number): void {
-    const samples = this.deltas.controlRttSamplesMs
     const observedBefore = this.deltas.controlRttObserved++
-    if (samples.length < CONTROL_RTT_RESERVOIR_LIMIT) {
-      samples.push(rttMs)
-      return
-    }
-    // Algorithm R: every round trip in the window keeps an equal chance of being kept.
-    const slot = Math.floor(Math.random() * (observedBefore + 1))
-    if (slot < CONTROL_RTT_RESERVOIR_LIMIT) samples[slot] = rttMs
+    keepInReservoir(
+      this.deltas.controlRttSamplesMs,
+      observedBefore,
+      rttMs,
+      CONTROL_RTT_RESERVOIR_LIMIT
+    )
+  }
+
+  recordHostPreAuth(path: HostPreAuthPath, outcome: HostPreAuthOutcome, durationMs: number): void {
+    const group = this.deltas.preAuthLatency[path][outcome]
+    const observedBefore = group.observed++
+    // Folded outside the reservoir so a dropped sample cannot hide the worst hello.
+    group.maxMs = Math.max(group.maxMs, durationMs)
+    const bucket = PRE_AUTH_BUCKET_BOUNDS_MS.findIndex((bound) => durationMs <= bound)
+    group.bucketCounts[bucket === -1 ? PRE_AUTH_BUCKET_BOUNDS_MS.length : bucket]! += 1
+    keepInReservoir(group.samplesMs, observedBefore, durationMs, PRE_AUTH_RESERVOIR_LIMIT)
   }
 
   start(readCounts: () => RelayProcessCounts, intervalMs = 30_000): void {
@@ -584,6 +653,7 @@ export class RelayObservability implements RelayRuntimeObserver {
       controlActivityRecoveriesDelta: deltas.controlActivityRecoveries,
       controlActivityRecoveryFailuresDelta: deltas.controlActivityRecoveryFailures,
       hostHellosShedDelta: deltas.hostHellosShed,
+      preAuthLatencyMs: preAuthLatencyFields(deltas.preAuthLatency),
       // Meaning changed when renewals began batching: for a batched row this is
       // the flush's duration, not that row's own statement latency. The
       // per-flush fields below are the ones to read for statement cost.
@@ -617,6 +687,35 @@ function regionCounterFields(
       counts[region] ?? 0
     ])
   )
+}
+
+// Count and buckets cover every hello in the window, so buckets sum exactly across windows and
+// cells; the percentiles summarise the reservoir and are omitted when empty.
+function preAuthLatencyFields(
+  latency: PreAuthLatency
+): Record<HostPreAuthPath, Record<HostPreAuthOutcome, Record<string, unknown>>> {
+  const summarize = (group: PreAuthLatencyGroup): Record<string, unknown> => {
+    if (group.observed === 0) return { count: 0 }
+    const { p50, p95, p99 } = latencySummary(group.samplesMs)
+    const bucketsLeMs: Record<string, number> = {}
+    PRE_AUTH_BUCKET_BOUNDS_MS.forEach((bound, index) => {
+      bucketsLeMs[String(bound)] = group.bucketCounts[index]!
+    })
+    bucketsLeMs['+Inf'] = group.bucketCounts[PRE_AUTH_BUCKET_BOUNDS_MS.length]!
+    return { count: group.observed, p50, p95, p99, max: roundMs(group.maxMs), bucketsLeMs }
+  }
+  const byOutcome = (
+    groups: Record<HostPreAuthOutcome, PreAuthLatencyGroup>
+  ): Record<HostPreAuthOutcome, Record<string, unknown>> => ({
+    admitted: summarize(groups.admitted),
+    refused: summarize(groups.refused),
+    abandoned: summarize(groups.abandoned)
+  })
+  return {
+    beforeCheck: byOutcome(latency.beforeCheck),
+    db: byOutcome(latency.db),
+    reserve: byOutcome(latency.reserve)
+  }
 }
 
 function lockWaiters(byKey: Record<string, number>, waiterRole: string): number {

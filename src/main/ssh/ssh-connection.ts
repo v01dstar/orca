@@ -85,12 +85,15 @@ import {
   requiresSystemSshForSecurityKey,
   shouldUseSystemSshTransport
 } from './ssh-transport-selection'
-import type { FileUploadSession } from '../providers/types'
+import type { FileUploadSession } from '../providers/filesystem-provider-contract'
 import { openSshSessionChannelWithRetry, waitForSshChannelOpen } from './ssh-channel-open'
 import { tagSftpHandshakeCorruption } from './sftp-handshake-corruption'
 import { withTimeout } from '../../shared/promise-timeout-fallback'
 import { isEphemeralRuntimeSshOwner } from '../../shared/managed-orcad-ssh-owner'
 export type { SshConnectionCallbacks } from './ssh-connection-utils'
+
+/** The sign-in a connection holds in memory, handed to the connection that replaces it. */
+export type SshCachedCredentials = { password: string | null; passphrase: string | null }
 
 type HostKeyTrustSources = {
   /** Whether the system-wide ssh_config could be restricting host keys; doubt reads as true. */
@@ -189,15 +192,24 @@ export class SshConnection {
   private disposed = false
   private cachedPassphrase: string | null = null
   private cachedPassword: string | null = null
+  // Only a sign-in the host accepted may be handed on; a typed or re-asked one is unproven until then.
+  private signInVerified = false
   private keyboardInteractiveCancelled = false
   // A rejected cached password must reach the user on the next round.
   private keyboardInteractivePasswordState = { passwordAutoAnswered: false }
   private hostKeyFingerprint: string | undefined
   private connectGeneration = 0
 
-  constructor(target: SshTarget, callbacks: SshConnectionCallbacks) {
+  constructor(
+    target: SshTarget,
+    callbacks: SshConnectionCallbacks,
+    credentials?: SshCachedCredentials
+  ) {
     this.target = target
     this.callbacks = callbacks
+    this.cachedPassword = credentials?.password ?? null
+    this.cachedPassphrase = credentials?.passphrase ?? null
+    this.signInVerified = credentials !== undefined
     this.state = {
       targetId: target.id,
       status: 'disconnected',
@@ -262,6 +274,14 @@ export class SshConnection {
   // Why: lets ssh:needsPassphrasePrompt skip redundant passphrase prompts on reconnect when the credential is already cached in-memory.
   hasCachedCredential(): boolean {
     return this.cachedPassphrase != null || this.cachedPassword != null
+  }
+
+  /** Null unless the host accepted it, so a wrong password is asked for again, not replayed. */
+  getReusableCredentials(): SshCachedCredentials | null {
+    if (!this.signInVerified || !this.hasCachedCredential()) {
+      return null
+    }
+    return { password: this.cachedPassword, passphrase: this.cachedPassphrase }
   }
 
   async exec(cmd: string, options?: SshExecOptions): Promise<ClientChannel> {
@@ -510,6 +530,12 @@ export class SshConnection {
         setCachedPassword: (value) => {
           if (isCurrent()) {
             this.cachedPassword = value
+            this.signInVerified = false
+          }
+        },
+        markCachedPasswordRejected: () => {
+          if (isCurrent()) {
+            this.signInVerified = false
           }
         },
         markCancelled: () => {
@@ -742,6 +768,7 @@ export class SshConnection {
         )
         if (val) {
           this.cachedPassword = val
+          this.signInVerified = false
           credentialRetryConfig.password = val
           this.respawnProxy(credentialRetryConfig, effectiveProxy)
           await this.doSsh2Connect(credentialRetryConfig, connectGeneration)
@@ -768,6 +795,7 @@ export class SshConnection {
       return false
     }
     this.cachedPassphrase = val
+    this.signInVerified = false
     retryConfig.passphrase = val
     this.respawnProxy(retryConfig, effectiveProxy)
     await this.doSsh2Connect(retryConfig, connectGeneration)
@@ -1434,6 +1462,9 @@ export class SshConnection {
   }
 
   private setState(status: SshConnectionStatus, error?: string): void {
+    if (status === 'auth-failed' || status === 'connected') {
+      this.signInVerified = status === 'connected'
+    }
     this.state = {
       ...this.state,
       status,

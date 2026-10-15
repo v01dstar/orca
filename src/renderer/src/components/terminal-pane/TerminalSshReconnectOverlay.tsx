@@ -1,10 +1,7 @@
 import { useCallback } from 'react'
 import { Loader2, Server, ServerOff } from 'lucide-react'
-import {
-  endOldRelayTerminalsLabel,
-  useEndOldRelayTerminalsAction,
-  useSshConnectFailureToast
-} from '@/ssh/ssh-old-relay-terminals-action'
+import { toast } from 'sonner'
+import { sshTargetConnectFailureText } from '@/ssh/ssh-host-server-status-copy'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
@@ -99,10 +96,6 @@ export function TerminalSshReconnectOverlay({
     ? toRuntimeExecutionHostId(sshOwnerEnvironmentId)
     : toSshExecutionHostId(targetId)
 
-  const showConnectFailure = useSshConnectFailureToast()
-  const endOldTerminals = useEndOldRelayTerminalsAction(targetId, {
-    local: !sshOwnerEnvironmentId
-  })
   const handleConnect = useCallback(async () => {
     if (isSshConnectInFlight(targetId) || isConnectingSshStatus(status)) {
       return
@@ -129,14 +122,15 @@ export function TerminalSshReconnectOverlay({
         }
       }
     } catch (err) {
-      showConnectFailure(
-        targetId,
-        err,
-        translate(
-          'auto.components.terminal.pane.TerminalSshReconnectOverlay.connectFailed',
-          'SSH connection failed'
-        ),
-        { local: !sshOwnerEnvironmentId }
+      toast.error(
+        sshTargetConnectFailureText(
+          targetId,
+          err,
+          translate(
+            'auto.components.terminal.pane.TerminalSshReconnectOverlay.connectFailed',
+            'SSH connection failed'
+          )
+        )
       )
       // Why: a failed connect usually means the renderer's target metadata is
       // stale (target removed, or re-added under a new id). Resync it so the
@@ -154,7 +148,7 @@ export function TerminalSshReconnectOverlay({
         })().catch(() => {})
       }
     }
-  }, [setSshConnectionState, showConnectFailure, sshOwnerEnvironmentId, status, targetId])
+  }, [setSshConnectionState, sshOwnerEnvironmentId, status, targetId])
 
   // Why: z-40 clears pane-local chrome (focus rim z-30); bg-card is fully opaque so terminal text cannot paint through.
   return (
@@ -226,34 +220,21 @@ export function TerminalSshReconnectOverlay({
             )}
           </Button>
         ) : (
-          <>
-            {endOldTerminals && !targetRemoved ? (
-              <Button
-                className="shrink-0"
-                size="sm"
-                variant="outline"
-                onClick={endOldTerminals}
-                disabled={isConnecting}
-              >
-                {endOldRelayTerminalsLabel()}
-              </Button>
-            ) : null}
-            <Button
-              className="shrink-0"
-              size="sm"
-              onClick={showConnect ? () => void handleConnect() : undefined}
-              disabled={!showConnect || isConnecting}
-            >
-              {!showConnect || isConnecting ? (
-                <>
-                  <Loader2 className="size-3.5 animate-spin" />
-                  {sshConnectingLabel()}
-                </>
-              ) : (
-                sshConnectVerb(status)
-              )}
-            </Button>
-          </>
+          <Button
+            className="shrink-0"
+            size="sm"
+            onClick={showConnect ? () => void handleConnect() : undefined}
+            disabled={!showConnect || isConnecting}
+          >
+            {!showConnect || isConnecting ? (
+              <>
+                <Loader2 className="size-3.5 animate-spin" />
+                {sshConnectingLabel()}
+              </>
+            ) : (
+              sshConnectVerb(status)
+            )}
+          </Button>
         )}
       </div>
     </div>

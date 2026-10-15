@@ -26,7 +26,7 @@ import { installPtyLeafMoveIpcHandler } from './ipc/leaf-move'
 import { installPtyRuntimeController } from './runtime/controller'
 import { installPtySnapshotIpcHandlers } from './ipc/snapshot'
 import {
-  assertFolderWorkspacePtyPathUsable as assertFolderWorkspacePtyPathUsableImpl,
+  assertWorkspaceAcceptsNewPty as assertWorkspaceAcceptsNewPtyImpl,
   localStartupCwdDirectoryExists,
   resolvePtySpawnStartupCwd as resolvePtySpawnStartupCwdImpl
 } from './host-env/spawn-cwd'
@@ -207,9 +207,10 @@ export function registerPtyHandlers(
     mainWindow.webContents.on('did-finish-load', finishLoadHandler)
   }
 
-  const assertFolderWorkspacePtyPathUsable = (
-    worktreeId: string | undefined
-  ): Promise<void> | void => assertFolderWorkspacePtyPathUsableImpl(store, worktreeId)
+  const assertWorkspaceAcceptsNewPty = (
+    worktreeId: string | undefined,
+    sessionId?: string
+  ): Promise<void> | void => assertWorkspaceAcceptsNewPtyImpl(store, worktreeId, sessionId)
   const resolvePtySpawnStartupCwd = (
     worktreeId: string | undefined,
     cwd: string | undefined,
@@ -234,7 +235,7 @@ export function registerPtyHandlers(
     noCodexResumeLaunch,
     reconcileSharedRuntimeResumeHome,
     stripSequencedStartupResumeArgv,
-    assertFolderWorkspacePtyPathUsable,
+    assertWorkspaceAcceptsNewPty,
     resolvePtySpawnStartupCwd,
     requestSerializedBuffer: session.requestSerializedBuffer,
     shutdownProviderAndDetectExit: session.shutdownProviderAndDetectExit,
@@ -274,7 +275,7 @@ export function registerPtyHandlers(
     options,
     getLocalPtyStartupPromise,
     adoptStablePane: adoptStablePaneBound,
-    assertFolderWorkspacePtyPathUsable,
+    assertWorkspaceAcceptsNewPty,
     resolvePtySpawnStartupCwd,
     localStartupCwdDirectoryExists,
     prepareCodexResumeHome: prepareCodexResumeHomeBound,

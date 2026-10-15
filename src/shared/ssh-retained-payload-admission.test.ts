@@ -103,14 +103,14 @@ describe('SSH retained payload admission', () => {
     expect(malformed).not.toHaveProperty('hostNodeRuntime')
   })
 
-  it('admits only a literal move offer on a relay server status', () => {
+  it("drops an older host's move offer and admits only a literal elsewhere flag", () => {
     const state = { targetId: 'ssh-a', status: 'connected', error: null, reconnectAttempt: 0 }
     const relay = { kind: 'relay', reason: 'relay_terminals_live', terminals: 2 }
 
     expect(
       admitSshConnectionState({ ...state, managedServer: { ...relay, offerMove: true } }, 'ssh-a')
         ?.managedServer
-    ).toEqual({ ...relay, offerMove: true })
+    ).toEqual(relay)
     expect(
       admitSshConnectionState(
         { ...state, managedServer: { ...relay, terminalsElsewhere: true } },
@@ -118,28 +118,11 @@ describe('SSH retained payload admission', () => {
       )?.managedServer
     ).toEqual({ ...relay, terminalsElsewhere: true })
     expect(
-      admitSshConnectionState({ ...state, managedServer: { ...relay, offerMove: 'yes' } }, 'ssh-a')
-        ?.managedServer
+      admitSshConnectionState(
+        { ...state, managedServer: { ...relay, terminalsElsewhere: 'yes' } },
+        'ssh-a'
+      )?.managedServer
     ).toEqual(relay)
-  })
-
-  it('admits the old relay processes a refusal names, dropping only a malformed list', () => {
-    const state = { targetId: 'ssh-a', status: 'error', error: null, reconnectAttempt: 0 }
-    const relay = { kind: 'relay', reason: 'relay_terminals_live', terminals: 2 }
-    const admit = (oldRelays: unknown): unknown =>
-      admitSshConnectionState({ ...state, managedServer: { ...relay, oldRelays } }, 'ssh-a')
-        ?.managedServer
-
-    expect(admit({ hostOs: 'posix', pids: [4101, 4102] })).toEqual({
-      ...relay,
-      oldRelays: { hostOs: 'posix', pids: [4101, 4102] }
-    })
-    expect(admit({ hostOs: 'posix', pids: [4101, -1, 1, 'x', 2.5] })).toEqual({
-      ...relay,
-      oldRelays: { hostOs: 'posix', pids: [4101] }
-    })
-    expect(admit({ hostOs: 'beos', pids: [] })).toEqual(relay)
-    expect(admit({ hostOs: 'windows' })).toEqual(relay)
   })
 
   it('rejects partial and malformed provider authority', () => {

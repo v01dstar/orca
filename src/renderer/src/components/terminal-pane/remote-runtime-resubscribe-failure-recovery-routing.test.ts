@@ -175,7 +175,7 @@ describe('remote runtime resubscribe failure: recovery routing', () => {
   beforeEach(() => {
     vi.resetModules()
     vi.doUnmock('../../runtime/remote-runtime-terminal-multiplexer')
-    vi.doMock('@/runtime/web-runtime-session', () => ({
+    vi.doMock('@/runtime/web-runtime-session-snapshot', () => ({
       refreshWebRuntimeSessionTabsSnapshot: refreshSessionTabsSnapshot
     }))
     vi.clearAllMocks()
@@ -330,7 +330,7 @@ describe('remote runtime resubscribe failure: recovery routing', () => {
 
   it('keeps an oversized-snapshot resubscribe failure informational', async () => {
     const { REMOTE_TERMINAL_SNAPSHOT_TOO_LARGE } =
-      await import('../../runtime/remote-runtime-terminal-multiplexer')
+      await import('../../runtime/remote-runtime-terminal-snapshot-state')
     const onError = vi.fn()
     const onPtyExit = vi.fn()
     const transport = await attachLivePane({ onError, onPtyExit })

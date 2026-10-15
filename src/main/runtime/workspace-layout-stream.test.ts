@@ -3,37 +3,75 @@ import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/exec
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import {
   localDesktopSession,
-  relaySshSession
+  relaySshSession,
+  serverRuntimeSession
 } from '../../shared/workspace-layout/workspace-layout-profile.test-fixture'
 import {
   emptySession,
   FOLDER_KEY,
   GIT_KEY,
+  SERVER_KEY,
   SSH_KEY
 } from '../../shared/workspace-layout/workspace-layout-session.test-fixture'
 import type { WorkspaceLayoutEvent } from '../../shared/workspace-layout/workspace-layout-stream-frames'
+import { loadWorkspaceLayout } from '../../shared/workspace-layout/workspace-layout-load'
+import { nameBasedLoadContext } from '../../shared/workspace-layout/workspace-layout-minted-ids'
+import {
+  publishWorkspaceLayout,
+  type PublishedWorkspaceLayout
+} from '../../shared/workspace-layout/workspace-layout-published'
 import { WorkspaceLayoutStream } from './workspace-layout-stream'
 
 const SSH_HOST: ExecutionHostId = 'ssh:target-1'
+const SERVER_HOST: ExecutionHostId = 'runtime:env-1'
 
 function fakeStore(partitions: Map<ExecutionHostId, WorkspaceSessionState>) {
-  const listeners = new Set<() => void>()
-  const onWorkspaceSessionWritten = vi.fn((listener: () => void) => {
+  const listeners = new Set<(hostId: ExecutionHostId | null) => void>()
+  const onWorkspaceSessionWritten = vi.fn((listener: (hostId: ExecutionHostId | null) => void) => {
     listeners.add(listener)
     return () => listeners.delete(listener)
   })
+  const getWorkspaceSession = vi.fn((hostId: ExecutionHostId) => partitions.get(hostId)!)
   return {
     store: {
-      getWorkspaceSession: (hostId: ExecutionHostId) => partitions.get(hostId)!,
+      getWorkspaceSession,
       getWorkspaceSessionHostIds: () => [...partitions.keys()],
       onWorkspaceSessionWritten
     },
     listeners,
+    /** A save that names the partition it wrote. */
     write(hostId: ExecutionHostId, session: WorkspaceSessionState) {
       partitions.set(hostId, session)
-      listeners.forEach((listener) => listener())
+      listeners.forEach((listener) => listener(hostId))
+    },
+    /** A save that names no partition, so every partition may have changed. */
+    writeUnnamed(hostId: ExecutionHostId, session: WorkspaceSessionState) {
+      partitions.set(hostId, session)
+      listeners.forEach((listener) => listener(null))
+    },
+    /** A removed host's partition, named by the save that drops it. */
+    removePartition(hostId: ExecutionHostId) {
+      partitions.delete(hostId)
+      listeners.forEach((listener) => listener(hostId))
     }
   }
+}
+
+/** Today's projection: every partition loaded with its save-and-diff report, then filtered by home. */
+function fullProjection(
+  partitions: Map<ExecutionHostId, WorkspaceSessionState>,
+  homeHostId: (key: string) => ExecutionHostId | null
+): [string, PublishedWorkspaceLayout][] {
+  const projected = new Map<string, PublishedWorkspaceLayout>()
+  for (const [hostId, session] of partitions) {
+    const { layout } = loadWorkspaceLayout(hostId, session, nameBasedLoadContext())
+    for (const [key, workspace] of Object.entries(layout.workspaces)) {
+      if (homeHostId(key) === hostId) {
+        projected.set(key, publishWorkspaceLayout(workspace, hostId))
+      }
+    }
+  }
+  return [...projected]
 }
 
 function setup() {
@@ -51,7 +89,7 @@ function setup() {
     store: () => fake.store,
     homeHostId: (key) => homes[key] ?? null
   })
-  return { ...fake, stream, homes }
+  return { ...fake, stream, homes, partitions }
 }
 
 const flush = () => new Promise<void>((resolve) => queueMicrotask(resolve))
@@ -198,5 +236,87 @@ describe('WorkspaceLayoutStream', () => {
       )
       expect(JSON.stringify(later.tabs)).toBe(JSON.stringify(earlier.tabs.slice(1)))
     }
+  })
+
+  it('re-projects only the partition a write names', async () => {
+    const { stream, store, write, writeUnnamed } = setup()
+    stream.subscribe(() => {})
+    store.getWorkspaceSession.mockClear()
+    write(SSH_HOST, relaySshSession('target-1'))
+    await flush()
+    expect(store.getWorkspaceSession.mock.calls).toEqual([[SSH_HOST]])
+    store.getWorkspaceSession.mockClear()
+    writeUnnamed(SSH_HOST, relaySshSession('target-1'))
+    await flush()
+    expect(store.getWorkspaceSession.mock.calls).toEqual([[LOCAL_EXECUTION_HOST_ID], [SSH_HOST]])
+  })
+
+  it('publishes what a full re-projection with the load report would, write after write', async () => {
+    const { stream, write, writeUnnamed, removePartition, homes, partitions } = setup()
+    const homeHostId = (key: string) => homes[key] ?? null
+    let cache = new Map<string, PublishedWorkspaceLayout>()
+    const { snapshot } = stream.subscribe((event) => {
+      if (event.type === 'removed') {
+        cache.delete(event.key)
+      } else {
+        cache.set(event.key, event.layout)
+      }
+    })
+    cache = new Map(snapshot.map((entry) => [entry.key, entry.layout]))
+    const expectFullProjection = async (): Promise<void> => {
+      await flush()
+      const expected = fullProjection(partitions, homeHostId)
+      expect(Object.fromEntries(cache)).toEqual(Object.fromEntries(expected))
+      // A late subscriber's snapshot keeps today's order too.
+      const late = stream.subscribe(() => {})
+      expect(late.snapshot.map((entry) => [entry.key, entry.layout])).toEqual(expected)
+      late.unsubscribe()
+    }
+    await expectFullProjection()
+
+    const local = localDesktopSession()
+    local.tabGroups![GIT_KEY]![0]!.tabOrder.reverse()
+    write(LOCAL_EXECUTION_HOST_ID, local)
+    await expectFullProjection()
+
+    // A named write and an unnamed one in the same task.
+    const ssh = relaySshSession('target-1')
+    delete ssh.tabsByWorktree[SSH_KEY]
+    delete ssh.unifiedTabs![SSH_KEY]
+    write(SSH_HOST, ssh)
+    writeUnnamed(LOCAL_EXECUTION_HOST_ID, localDesktopSession())
+    await expectFullProjection()
+
+    // A new partition, a home that moves between partitions, then the partition removed.
+    homes[SERVER_KEY] = SERVER_HOST
+    write(SERVER_HOST, serverRuntimeSession('env-1'))
+    await expectFullProjection()
+    homes[GIT_KEY] = SERVER_HOST
+    write(SSH_HOST, relaySshSession('target-1'))
+    await expectFullProjection()
+    homes[GIT_KEY] = LOCAL_EXECUTION_HOST_ID
+    removePartition(SERVER_HOST)
+    await expectFullProjection()
+  })
+
+  it('re-projects every partition after a failed projection', async () => {
+    const { stream, store, write } = setup()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const events: WorkspaceLayoutEvent[] = []
+    stream.subscribe((event) => events.push(event))
+    store.getWorkspaceSession.mockImplementationOnce(() => {
+      throw new Error('read failed')
+    })
+    const local = localDesktopSession()
+    local.tabGroups![GIT_KEY]![0]!.tabOrder.reverse()
+    write(LOCAL_EXECUTION_HOST_ID, local)
+    await flush()
+    expect(events).toEqual([])
+    // The local edit the failed projection missed is published by a write elsewhere.
+    write(SSH_HOST, relaySshSession('target-1'))
+    await flush()
+    expect(events.map((event) => [event.type, event.key])).toEqual([['workspace', GIT_KEY]])
+    expect(warn).toHaveBeenCalledTimes(1)
+    warn.mockRestore()
   })
 })

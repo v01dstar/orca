@@ -20,12 +20,14 @@ import {
 import { BrowserClientPageMetadataParams } from '../browser-client-page-metadata-protocol'
 import { DelegatedMobileDeviceSyncParamsSchema } from '../delegated-mobile-device-contract'
 import { RegisterDeviceKeyParamsSchema } from '../device-key-registration-contract'
+import { HostAccountLaunchEnvParams } from '../host-account-launch-env'
 import {
   PairingGetEndpointsParamsSchema,
   PairingProvisionRelayParamsSchema
 } from '../mobile-relay-credential-contract'
 import { MobileRelayHostWorktreesParamsSchema } from '../mobile-relay-hosts-contract'
 import { MobileWebBundleChunkParamsSchema } from '../mobile-web-bundle/bundle-rpc-contract'
+import { OrcadMigrationBlobChunkRequestSchema } from '../orcad-migration-blob-transfer'
 import { OrcadMigrationSnapshotChunkRequestSchema } from '../orcad-migration-scrollback'
 import { OrcadTerminalCensusParamsSchema } from '../orcad-terminal-census'
 import { pluginConsentRequestSchema } from '../plugins/plugin-consent-request'
@@ -46,6 +48,7 @@ import {
 } from './accounts-params'
 import { PrepareCodexForWslPaneParams } from './agent-hooks-params'
 import { AgentLaunch, AgentLaunchReplay } from './agent-launch-params'
+import { AgentLaunchSettingsMutation } from './agent-launch-settings-params'
 import {
   AttachmentReadParams,
   AttachmentUploadAppendParams,
@@ -314,8 +317,11 @@ import {
 } from './hosted-review-params'
 import {
   AssignableUsers,
+  AttachmentImage,
+  CancelGenerateIssueSummary,
   Connect,
   CreateIssue as CreateIssueOfJiraParams,
+  GenerateIssueSummary,
   IssueComment as IssueCommentOfJiraParams,
   IssueKey,
   IssueUpdate,
@@ -328,6 +334,8 @@ import {
   SiteSelection,
   UserSearch
 } from './jira-params'
+import { JiraQuickFilterStateParam } from './jira-quick-filter-params'
+import { JiraSavedFilterMutationParam } from './jira-saved-filter-params'
 import {
   AgentIssueContext,
   AgentSearchIssues,
@@ -379,7 +387,10 @@ import {
   NotificationUnsubscribeParams,
   NotificationsSubscribeParams
 } from './notifications-params'
-import { OrcadMigrationCatalogParams } from './orcad-migration-params'
+import {
+  OrcadMigrationCatalogParams,
+  OrcadMigrationCommitCatalogParams
+} from './orcad-migration-params'
 import {
   FederationDispatchParams,
   FederationFleetSnapshotParams,
@@ -527,6 +538,7 @@ import {
   QueuedMessageEditHoldParams,
   QueuedMessageUpdateParams
 } from './structured-agent-session-queued-edit-params'
+import { TerminalDaemonRestartSeveredParams } from './terminal-daemon-params'
 import { TerminalAdoptOrphans } from './terminal-orphan-params'
 import { TerminalQuickCommandsUpdate } from './terminal-quick-command-params'
 import {
@@ -622,6 +634,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'accounts.selectCodex': SelectAccountParams,
   'accounts.selectCodexForTarget': SelectCodexAccountForTargetParams,
   'accounts.selectData': SelectDataAccountParams,
+  'accounts.setHostLaunchEnv': HostAccountLaunchEnvParams,
   'accounts.subscribe': null,
   'accounts.unsubscribe': AccountsUnsubscribeParams,
   'agent.launch': AgentLaunch,
@@ -976,9 +989,12 @@ export const RPC_PARAMS_BY_METHOD = {
   'hostedReview.forBranch': HostedReviewForBranch,
   'hostedReview.getCreationEligibility': HostedReviewCreationEligibility,
   'jira.addIssueComment': IssueCommentOfJiraParams,
+  'jira.attachmentImage': AttachmentImage,
+  'jira.cancelGenerateIssueSummary': CancelGenerateIssueSummary,
   'jira.connect': Connect,
   'jira.createIssue': CreateIssueOfJiraParams,
   'jira.disconnect': SiteSelection,
+  'jira.generateIssueSummary': GenerateIssueSummary,
   'jira.getIssue': IssueKey,
   'jira.getIssueStream': IssueKey,
   'jira.getProjectStatusOrder': ProjectStatusOrder,
@@ -1069,7 +1085,8 @@ export const RPC_PARAMS_BY_METHOD = {
   'notifications.unsubscribe': NotificationUnsubscribeParams,
   'orcad.migration.abortCatalog': OrcadMigrationCatalogParams,
   'orcad.migration.catalogState': OrcadMigrationCatalogParams,
-  'orcad.migration.commitCatalog': OrcadMigrationCatalogParams,
+  'orcad.migration.commitCatalog': OrcadMigrationCommitCatalogParams,
+  'orcad.migration.stageBlobChunk': OrcadMigrationBlobChunkRequestSchema,
   'orcad.migration.stageCatalog': OrcadMigrationCatalogParams,
   'orcad.migration.stageSnapshotChunk': OrcadMigrationSnapshotChunkRequestSchema,
   'orcad.terminalCensus': OrcadTerminalCensusParamsSchema,
@@ -1187,7 +1204,9 @@ export const RPC_PARAMS_BY_METHOD = {
   'session.tabs.unsubscribeAll': SessionTabsUnsubscribeAllParams,
   'session.tabs.updatePaneLayout': UpdatePaneLayout,
   'settings.get': null,
+  'settings.getAgentLaunch': null,
   'settings.getTerminalQuickCommands': null,
+  'settings.mutateAgentLaunch': AgentLaunchSettingsMutation,
   'settings.mutateNativeChatSessionOptions': NativeChatSessionOptionsMutation,
   'settings.update': SettingsUpdate,
   'settings.updatePRBotAuthorOverride': PRBotAuthorOverrideUpdate,
@@ -1265,9 +1284,15 @@ export const RPC_PARAMS_BY_METHOD = {
   'terminal.unsubscribe': TerminalUnsubscribe,
   'terminal.updateViewport': TerminalUpdateViewport,
   'terminal.wait': TerminalWait,
+  'terminalDaemon.restartSevered': TerminalDaemonRestartSeveredParams,
+  'terminalDaemon.severedStatus': null,
   'ui.get': null,
+  'ui.getJiraQuickFilters': null,
+  'ui.getJiraSavedFilters': null,
+  'ui.mutateJiraSavedFilters': JiraSavedFilterMutationParam,
   'ui.recordFeatureInteraction': FeatureInteractionIdParam,
   'ui.set': UiUpdate,
+  'ui.setJiraQuickFilters': JiraQuickFilterStateParam,
   'updater.check': UpdaterCheckParams,
   'updater.download': null,
   'updater.getStatus': null,

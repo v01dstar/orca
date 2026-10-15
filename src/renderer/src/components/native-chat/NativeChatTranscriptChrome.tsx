@@ -15,7 +15,7 @@ import {
   useLocalImageSrc,
   releaseLocalImageSrcByKey
 } from '@/components/editor/useLocalImageSrc'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
+import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import { copyableNativeChatImageSrc, keepPreviewOpenForChatMenu } from './native-chat-image-copy'
 import { isNativeChatPastedImagePath } from './native-chat-image-paste'
 import { chatImageAccess } from '@/lib/local-file-access'

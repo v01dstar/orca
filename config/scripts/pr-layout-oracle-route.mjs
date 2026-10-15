@@ -36,6 +36,8 @@ const LAYOUT_ORACLE_PREFIXES = [
   'src/main/persistence/closed-terminal-tab-write-fence.ts',
   'src/main/runtime/runtime-workspace-session-controller.ts',
   'src/main/runtime/terminal-surface-close.ts',
+  'src/main/runtime/terminal/output/terminal-derived-agent-facts.ts',
+  'src/main/runtime/terminal/output/terminal-output-generation.ts',
   'src/renderer/src/components/terminal/terminal-tab-actions.ts',
   'src/renderer/src/components/tab-bar/web-runtime-tab-move-mirror.ts',
   'src/shared/rpc-contract/workspace-layout-params.ts',

@@ -20,6 +20,7 @@ import type {
   AutomationWorkspaceProvenance,
   CliWorkspaceProvenance,
   GitPushTarget,
+  GitStatusMetadataChangedEvent,
   Worktree,
   WorktreeHeadIdentity
 } from '../../shared/worktree/types'
@@ -138,6 +139,7 @@ import {
 } from '../worktree-name-retirement'
 import { createRetiredNameLookup } from '../../shared/worktree/retired-name-registry'
 import { findPendingWorktreeRemovalConflict } from '../worktree-removal-table'
+import { isWslMoveWorktreeBlocked } from '../persistence/moving-wsl-projects/wsl-move-background-backoff'
 // Why: bound the fallback `git fetch origin` so a Windows credential-manager GUI hang (STA-1292) can't wedge worktree creation forever.
 const CREATE_BASE_FALLBACK_FETCH_TIMEOUT_MS = 60_000
 // Why (#17828 CodeRabbit follow-up): the deferred materialize fetch runs off the main
@@ -306,7 +308,7 @@ export function recordWorkspaceLineageForCreatedWorktree(
 }
 
 async function spawnLocalStartupAndSetupTerminals(args: {
-  runtime: OrcaRuntimeService | undefined
+  runtime: OrcaRuntimeService
   worktree: Worktree
   startup: CreateWorktreeArgs['startup']
   setup: CreateWorktreeResult['setup']
@@ -315,7 +317,7 @@ async function spawnLocalStartupAndSetupTerminals(args: {
   createdWithAgent: CreateWorktreeArgs['createdWithAgent']
 }): Promise<StagedStartupResult> {
   const { runtime, worktree, startup, setup, defaultTabs, settings, createdWithAgent } = args
-  if (!runtime || !startup || defaultTabs?.tabs.length) {
+  if (!startup || defaultTabs?.tabs.length) {
     return { didSpawnSetup: false }
   }
 
@@ -836,6 +838,10 @@ function persistMaterializedPushTargetIfCreated(
   if (!target.remoteCreated || !worktreeId || !store?.setWorktreeMeta) {
     return
   }
+  // Bookkeeping incidental to the push: a project a WSL move is taking skips it, not the push.
+  if (isWslMoveWorktreeBlocked(worktreeId, store.getAllWorktreeMeta()[worktreeId]?.hostId)) {
+    return
+  }
   store.setWorktreeMeta(worktreeId, { pushTarget: target })
 }
 
@@ -918,11 +924,15 @@ export function notifyWorktreesChanged(mainWindow: BrowserWindow, repoId: string
 
 export function notifyWorktreeGitStatusMetadataChanged(
   mainWindow: BrowserWindow,
-  repoId: string
+  repoId: string,
+  worktreePaths: readonly string[] | null = null
 ): void {
   // Why: index churn is a Source Control freshness hint, not a graph mutation; leave structural caches and runtime/mobile events untouched.
   if (!mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('worktrees:gitStatusMetadataChanged', { repoId })
+    const payload: GitStatusMetadataChangedEvent = worktreePaths
+      ? { repoId, worktreePaths: [...worktreePaths] }
+      : { repoId }
+    mainWindow.webContents.send('worktrees:gitStatusMetadataChanged', payload)
   }
 }
 
@@ -953,7 +963,7 @@ export function createLocalWorktree(
   repo: Repo,
   store: Store,
   mainWindow: BrowserWindow,
-  runtime?: OrcaRuntimeService,
+  runtime: OrcaRuntimeService,
   timing: WorktreeCreateTimingRecorder = createWorktreeCreateTimingRecorder()
 ): Promise<CreateWorktreeResult> {
   // Why a holder fired in `finally`: consuming a prepared checkout leaves the pool one short, so a
@@ -976,7 +986,7 @@ async function performLocalWorktreeCreate(
   mainWindow: BrowserWindow,
   rearm: PreparationRearmHolder,
   timing: WorktreeCreateTimingRecorder,
-  runtime?: OrcaRuntimeService
+  runtime: OrcaRuntimeService
 ): Promise<CreateWorktreeResult> {
   const settings = store.getSettings()
   const worktreePathSettings = getWorktreePathSettings(
@@ -1691,6 +1701,24 @@ async function performLocalWorktreeCreate(
     })
   )
 
+  // Why: an automation's terminals start in main, so the window is handed none to launch.
+  const provisionedByHost = Boolean(args.automationProvenance)
+  if (provisionedByHost && (setup || defaultTabs?.tabs.length)) {
+    void runtime.provisionManagedWorktreeTerminals(
+      {
+        worktreeSelector: `id:${worktree.id}`,
+        worktreeId: worktree.id,
+        worktreePath: worktree.path,
+        ...(setup ? { setup } : {}),
+        ...(defaultTabs ? { defaultTabs } : {}),
+        hasStartupTerminal: false,
+        setupCommandPlatform: getSetupRunnerCommandPlatformForLaunch(setup, 'posix'),
+        surfaceOwner: false
+      },
+      worktree
+    )
+  }
+
   notifyWorktreesChanged(mainWindow, repo.id)
   return {
     worktree: {
@@ -1702,12 +1730,16 @@ async function performLocalWorktreeCreate(
     },
     ...(worktreeLineage ? { lineage: worktreeLineage } : {}),
     ...(workspaceLineage ? { workspaceLineage } : {}),
-    ...(stagedStartup.activationSetup
-      ? { setup: stagedStartup.activationSetup }
-      : setup && !stagedStartup.didSpawnSetup
-        ? { setup }
-        : {}),
-    ...(defaultTabs ? { defaultTabs } : {}),
+    ...(provisionedByHost
+      ? {}
+      : {
+          ...(stagedStartup.activationSetup
+            ? { setup: stagedStartup.activationSetup }
+            : setup && !stagedStartup.didSpawnSetup
+              ? { setup }
+              : {}),
+          ...(defaultTabs ? { defaultTabs } : {})
+        }),
     ...(addResult.localBaseRefRefresh
       ? { localBaseRefRefresh: addResult.localBaseRefRefresh }
       : {}),

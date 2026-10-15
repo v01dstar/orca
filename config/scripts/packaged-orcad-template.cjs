@@ -1,7 +1,7 @@
 /**
  * The orcad deployment template inside desktop builds (design D2): JS plus every target's
  * addons, never a Node runtime. SSH relays and managed orcad deploys materialize a target's
- * slot from it (src/main/ssh/orcad-artifact-materializer.ts, `process.resourcesPath`).
+ * slot from it (src/main/orcad/orcad-artifact-materializer.ts, `process.resourcesPath`).
  *
  *   node config/scripts/packaged-orcad-template.cjs --reseal-signed <appDir> <signedListFile>
  *

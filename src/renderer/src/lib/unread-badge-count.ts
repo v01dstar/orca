@@ -17,6 +17,7 @@ import type { StoredAgentAttentionUnread } from '@/attention/agent-attention-con
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { Tab } from '../../../shared/tab-types'
 import type { Worktree } from '../../../shared/worktree/types'
+import { hasLiveTabMarker } from '@/store/slices/workspace-attention/workspace-live-markers'
 
 export type UnreadBadgeCountSources = {
   worktreesByRepo: Readonly<Record<string, readonly Worktree[]>>
@@ -33,22 +34,7 @@ export type UnreadBadgeCountSources = {
   unreadTerminalTabs?: Readonly<Record<string, StoredAgentAttentionUnread>>
 }
 
-export function hasUnreadFolderTab(
-  sources: Pick<
-    UnreadBadgeCountSources,
-    'tabsByWorktree' | 'unifiedTabsByWorktree' | 'unreadTerminalTabs'
-  >,
-  key: string
-): boolean {
-  return Boolean(
-    sources.tabsByWorktree?.[key]?.some((tab) => sources.unreadTerminalTabs?.[tab.id]) ||
-    sources.unifiedTabsByWorktree?.[key]?.some(
-      (tab) => tab.contentType === 'agent-session' && sources.unreadTerminalTabs?.[tab.id]
-    )
-  )
-}
-
-/** Workspace flags clear on a visit; tab markers can outlive that visit or their owner. */
+/** Folder rows also need a live tab marker; worktree rows count their flag alone. */
 export function getUnreadBadgeCount(sources: UnreadBadgeCountSources): number {
   const { visibleHostIds, defaultHostId } = sources
   // Preserve the existing id-only count while narrowing it to visible hosts.
@@ -74,7 +60,7 @@ export function getUnreadBadgeCount(sources: UnreadBadgeCountSources): number {
 function countUnreadFolderRows(sources: UnreadBadgeCountSources): number {
   const { projectGroups, visibleHostIds, defaultHostId, hiddenOtherDevicePairings } = sources
   const unread = sources.folderWorkspaces.filter(
-    (folder) => folder.isUnread && hasUnreadFolderTab(sources, folderWorkspaceKey(folder.id))
+    (folder) => folder.isUnread && hasLiveTabMarker(sources, folderWorkspaceKey(folder.id))
   )
   if (unread.length === 0) {
     return 0

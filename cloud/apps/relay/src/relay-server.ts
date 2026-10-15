@@ -255,6 +255,7 @@ export function createRelayServer(
         epoch: join.epoch
       })
     }
+    directory.onOutranked = (seat) => reservePlacement?.supersedeOutranked(seat)
     reserveLedger.start()
     const reconcile = (): void => {
       const now = (options.now ?? Date.now)()

@@ -8,43 +8,17 @@ import {
 } from '../../../src/shared/instabox/instabox-api-types'
 import { removeHostAndCloseClient } from '../transport/host-removal-lifecycle'
 import type { HostProfile } from '../transport/types'
+import { instaboxHostIdFor, machineIdOfHost } from './instabox-host-identity'
 import { INSTABOX_ENDPOINT_SCHEME, instaboxMachineIdOf } from './instabox-lazy-websocket'
-
-const HOST_ID_PREFIX = 'instabox-'
 
 // Why dynamic (here and below): these pull in native modules; host screens import this file.
 const sessionModule = () => import('./instabox-mobile-session')
 
-export function instaboxHostIdFor(machineId: string): string {
-  return `${HOST_ID_PREFIX}${machineId}`
-}
-
-function machineIdOfHost(hostId: string): string | null {
-  return hostId.startsWith(HOST_ID_PREFIX) ? hostId.slice(HOST_ID_PREFIX.length) : null
-}
-
-/** The remove-host confirm's wording; an Instabox host's removal deletes the machine. */
-export function removeHostConfirmCopy(
-  hostId: string | undefined,
-  name: string | undefined
-): { title: string; message: string; confirmLabel: string } {
-  return hostId && machineIdOfHost(hostId)
-    ? {
-        title: 'Delete Machine',
-        message: `Delete "${name}"? This deletes the Instabox machine with its disks and every workspace on it. This cannot be undone.`,
-        confirmLabel: 'Delete'
-      }
-    : {
-        title: 'Remove Host',
-        message: `Remove "${name}"? You can re-pair later.`,
-        confirmLabel: 'Remove'
-      }
-}
-
-/** An Instabox deletion's own reason (e.g. signed out); other hosts keep the caller's text. */
-export function removeHostErrorMessage(hostId: string, error: unknown, fallback: string): string {
-  return machineIdOfHost(hostId) && error instanceof Error ? error.message : fallback
-}
+export {
+  instaboxHostIdFor,
+  removeHostConfirmCopy,
+  removeHostErrorMessage
+} from './instabox-host-identity'
 
 /** Removes a host; an Instabox host's machine is deleted on the server first. */
 export async function removeHostEverywhere(

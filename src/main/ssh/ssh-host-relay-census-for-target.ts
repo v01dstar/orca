@@ -1,5 +1,4 @@
 import type { SshTarget } from '../../shared/ssh-types'
-import type { SshConnection } from './ssh-connection'
 import type { CensusHostRelayTerminals } from './orcad-migration-terminal-gate'
 import { requireManagedOrcadInfrastructure } from './orcad-managed-runtime-context'
 import {
@@ -23,16 +22,6 @@ export function censusHostRelayTerminalsFor(target: SshTarget): CensusHostRelayT
   }
   // Inside a connect its decision owns the transport; outside one (CLI, delta move) the census does.
   return () => (currentSshOwner() ? census() : censusOutsideConnect(target, census))
-}
-
-/** Runs on a transport to the host that is closed afterwards unless a connect adopted it. */
-export function runOnSshHostCensusTransport<T>(
-  target: SshTarget,
-  run: (conn: SshConnection) => Promise<T>
-): Promise<T> {
-  return censusOutsideConnect(target, async () =>
-    run(await requireManagedOrcadInfrastructure().connectionManager.connect(target))
-  )
 }
 
 async function censusOutsideConnect<T>(target: SshTarget, census: () => Promise<T>): Promise<T> {

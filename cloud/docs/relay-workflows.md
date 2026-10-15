@@ -461,8 +461,9 @@ margin covers. Each cell is isolated, drained until restart-safe, replaced
 from a targeted saved plan, and restored only after a new incarnation reports the exact digest, cap,
 heartbeat, and rehome protocol. Restart-safe means the cell runtime itself carries nothing live (no
 controls, in-flight connections, reserved connection units, splices, or queued bytes) and no
-migration is open, for a whole drain pace window, which every live restart-safe call must pass.
-Pre-auth and total connections are printed but do not reset the window: they include
+migration is open, on two consecutive samples the second of which is taken at or after the end
+of the drain pace window. Every live restart-safe call supplies that window (`--pace-window-ms`).
+Pre-auth and total connections are printed but do not restart the count: they include
 unauthenticated redials that lose nothing on a restart. Director activity leases left by hosts that already went or cannot
 be placed do not hold the restart; every `relay_capacity_transition_restart_progress` sample and
 the final verified line report them under `stranded`. The durable
@@ -539,11 +540,10 @@ drained. Then read the cell's live runtime image from
 The `drain-pace-window-ms` input sets the window the cell spreads its drain sends over. Each
 drained host re-dials the director as soon as it reads `drain`, so the window sets the re-placement
 arrival rate: hosts / window, about 1.8-2.7 hosts/s for a US cell at the default. The window also
-sets two waits: restart-safe needs an empty runtime for (ceil(window / 5 s) + 1) consecutive
-5-second samples, and the drain step's overall timeout is the 15-minute migration lease plus the
-window, plus the window's excess over `300000` (20 minutes at the default, 50 at `1200000`).
-Because the quiet starts only once the last host has left, a drain step takes about twice the
-window: about 30 minutes at `900000` and 40 at `1200000`.
+sets two waits: restart-safe needs an empty runtime on two consecutive 5-second samples, the
+second at or after the window's end, and the drain step's overall timeout is the 15-minute
+migration lease plus the window (20 minutes at the default, 35 at `1200000`). The runtime empties
+as the window closes, so a drain step takes about the window plus a few seconds to half a minute.
 
 - Allowed values are `300000` (the default, and every wave before this input), `60000`,
   `30000`, `900000`, and `1200000`. The wave validator refuses anything else, and each cell job
@@ -634,7 +634,7 @@ monitor already excludes 503s from its director 5xx rule.
    - its `paceVerdict` is PASS, sealed only from a report on that cell that drained at least 400
      hosts at that pace;
    - time to empty is within window + hosts / 50 s + 10 s. Take `settledAfterSeconds` minus the
-     restart-safe quiet; this is an upper bound, since it includes the isolate.
+     one 5-second confirming sample; this is an upper bound, since it includes the isolate.
 
    The batch check enforces the PASS. A canary that sealed anything else authorizes only
    `300000` batches. The 400-host floor exists because a pace is an arrival rate (hosts /

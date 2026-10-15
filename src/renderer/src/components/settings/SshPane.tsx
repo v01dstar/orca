@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import { Plus, Upload } from 'lucide-react'
 import type { SshTarget } from '../../../../shared/ssh-types'
 import { useAppStore } from '@/store'
-import { useSshConnectFailureToast } from '@/ssh/ssh-old-relay-terminals-action'
+import { sshTargetConnectFailureText } from '@/ssh/ssh-host-server-status-copy'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { Button } from '../ui/button'
 import { SshTargetCard } from './SshTargetCard'
@@ -191,16 +191,17 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
     setShowForm(true)
   }
 
-  const showConnectFailure = useSshConnectFailureToast()
   const handleConnect = async (targetId: string): Promise<void> => {
     try {
       await window.api.ssh.connect({ targetId })
       recordFeatureInteraction('ssh')
     } catch (err) {
-      showConnectFailure(
-        targetId,
-        err,
-        translate('auto.components.settings.SshPane.e95d5ae10e', 'Connection failed')
+      toast.error(
+        sshTargetConnectFailureText(
+          targetId,
+          err,
+          translate('auto.components.settings.SshPane.e95d5ae10e', 'Connection failed')
+        )
       )
     }
   }
@@ -268,9 +269,11 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
         } else {
           toast.success(
             translate(
-              'auto.components.settings.SshPane.f8050f6307',
-              'Synced {{value0}} server{{value1}}',
-              { value0: result.targets.length, value1: result.targets.length > 1 ? 's' : '' }
+              result.targets.length === 1
+                ? 'auto.components.settings.SshPane.syncedServerSingular'
+                : 'auto.components.settings.SshPane.syncedServerPlural',
+              result.targets.length === 1 ? 'Synced {{count}} server' : 'Synced {{count}} servers',
+              { count: result.targets.length }
             )
           )
         }

@@ -14,13 +14,7 @@ export function projectStructuredAgentSessionMessages(
   optimistic: readonly StructuredAgentSessionOptimisticMessage[],
   submissions: readonly AgentJournalSubmission[]
 ) {
-  return projectMessages(
-    items,
-    optimistic,
-    submissions,
-    { rejectedInPlace: true },
-    projectStructuredQuestionMessages
-  )
+  return projectMessages(items, optimistic, submissions, projectStructuredQuestionMessages)
 }
 
 export type StructuredPromptItem = AgentJournalRenderItem & {

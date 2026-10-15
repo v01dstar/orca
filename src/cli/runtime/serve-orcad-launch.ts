@@ -4,6 +4,7 @@
  */
 import { dirname, join } from 'node:path'
 import { runProcess, spawnProcess } from '@orca/process-host'
+import type { ProcessSpec } from '@orca/process-host/process-spec'
 import {
   ORCAD_LOCAL_SERVE_SELECTION_ENTRY,
   ORCAD_LOCAL_SERVE_SELECTION_FLAGS as FLAGS,
@@ -14,8 +15,6 @@ import { waitForRecipeJson } from './serve-recipe-json'
 import { superviseForegroundServe } from './serve-update-supervisor'
 import { isSupervisedSpawnHeld } from './serve-supervised-stop'
 import { redactingSpawn, shouldRedactSupervisedStdout } from './serve-pairing-redaction'
-
-type SupervisorArgs = Parameters<typeof superviseForegroundServe>[0]
 
 export type ServeOrcaAppArgs = {
   json?: boolean
@@ -81,31 +80,17 @@ export async function resolveLocalServeRuntime(
   }
 }
 
-/** The shared spawn chokepoint (windowsHide, no shell) in the supervisor's spawn shape. */
-const spawnThroughChokepoint: SupervisorArgs['spawnChild'] = (program, args, options) =>
-  spawnProcess({
-    program,
-    args,
-    cwd: typeof options.cwd === 'string' ? options.cwd : undefined,
-    env: options.env,
-    stdio: options.stdio,
-    detached: options.detached
-  })
-
 /** Electron serve binds every interface (`exposeNetworkByDefault`); orcad does it on request. */
 export function serveWithOrcad(
   selection: Extract<ServeRuntimeSelection, { kind: 'orcad' }>,
   args: ServeOrcaAppArgs,
   userDataPath: string,
   /** The caller's environment without `ELECTRON_RUN_AS_NODE`. */
-  baseEnv: NodeJS.ProcessEnv,
-  spawnChildRaw: SupervisorArgs['spawnChild'] = spawnThroughChokepoint
+  baseEnv: NodeJS.ProcessEnv
 ): Promise<number> {
-  const spawnChild = shouldRedactSupervisedStdout(args.supervise === true)
-    ? redactingSpawn(spawnChildRaw)
-    : spawnChildRaw
-  const childArgs = [selection.entry, ...orcadServeArgs(args)]
-  const spawnOptions: SupervisorArgs['spawnOptions'] = {
+  const spec: ProcessSpec = {
+    program: selection.runtime,
+    args: [selection.entry, ...orcadServeArgs(args)],
     detached: args.recipeJson === true,
     cwd: dirname(selection.entry),
     stdio: args.recipeJson === true ? ['ignore', 'pipe', 'inherit'] : 'inherit',
@@ -116,17 +101,18 @@ export function serveWithOrcad(
       ORCA_VERSION: selection.version
     }
   }
+  const spawnChild = shouldRedactSupervisedStdout(args.supervise === true)
+    ? redactingSpawn(spawnProcess)
+    : spawnProcess
   if (isSupervisedSpawnHeld()) {
     return Promise.resolve(0)
   }
-  const child = spawnChild(selection.runtime, childArgs, spawnOptions)
+  const child = spawnChild(spec)
   if (args.recipeJson) {
     return waitForRecipeJson(child)
   }
   return superviseForegroundServe({
-    executable: selection.runtime,
-    childArgs,
-    spawnOptions,
+    spec,
     spawnChild,
     child,
     handoffPath: null,

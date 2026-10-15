@@ -1,3 +1,4 @@
+import { observeJiraImageHostStatus } from '@/runtime/runtime-jira-image-cache'
 import type { RuntimeHostStatusSnapshot } from '../../../../shared/runtime-host-status'
 import { getTabIdsAwaitingHostHydrationRemount } from '@/lib/parked-terminal-host-hydration'
 import { emitAutomationsChangedWindowEvent } from '@/lib/automations-changed-window-event'
@@ -31,6 +32,8 @@ import { registerUpdaterStatusIpcBridge } from './updater-status-ipc-bridge'
 import { createWorktreeEventRuntime } from './worktree-event-runtime'
 import { registerWorkspaceShortcutIpcBridge } from './workspace-shortcut-ipc-bridge'
 import { registerZoomIpcBridge } from './zoom-ipc-bridge'
+import { registerWslAccountNoticeIpcBridge } from './wsl-account-notice-ipc-bridge'
+import { registerWslHostIpcBridge } from './wsl-host-ipc-bridge'
 
 function isRuntimeEnvironmentActive(): boolean {
   return Boolean(useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim())
@@ -69,6 +72,7 @@ export function installAppLifetimeIpcEvents(
     const apply = (snapshot: RuntimeHostStatusSnapshot): void => {
       useAppStore.getState().applyRuntimeHostStatusSnapshot(snapshot)
       remoteRuntimeTerminalColorPush.observeStatusSnapshot(snapshot)
+      observeJiraImageHostStatus(snapshot)
     }
     let stopped = false
     unsubs.push(statusApi.onStatusChanged(apply), () => {
@@ -85,6 +89,7 @@ export function installAppLifetimeIpcEvents(
   }
   const unsubscribeRuntimeEnvironmentStore = registerRuntimeClientIpcBridge(unsubs, worktreeRuntime)
   registerBackgroundWorktreeRemovalBridge(unsubs)
+  registerWslHostIpcBridge(unsubs)
   registerProjectCatalogIpcBridge(
     unsubs,
     worktreeRuntime.worktreeChangeRefreshQueue,
@@ -95,6 +100,7 @@ export function installAppLifetimeIpcEvents(
   registerOrcaProfileAuthIpcBridge(unsubs)
   registerWorkspaceShortcutIpcBridge(unsubs)
   registerOsMarkdownFileOpenBridge(unsubs)
+  registerWslAccountNoticeIpcBridge(unsubs)
   unsubs.push(
     window.api.ui.onActivateWorktree(({ repoId, worktreeId, setup, startup, defaultTabs }) => {
       void worktreeRuntime

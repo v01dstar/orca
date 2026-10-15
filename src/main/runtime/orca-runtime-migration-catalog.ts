@@ -7,6 +7,11 @@ import type {
   OrcadMigrationSnapshotChunkRequest,
   OrcadMigrationSnapshotChunkResult
 } from '../../shared/orcad-migration-scrollback'
+import type {
+  OrcadMigrationBlobChunkRequest,
+  OrcadMigrationBlobChunkResult,
+  OrcadMigrationBlobDescriptor
+} from '../../shared/orcad-migration-blob-transfer'
 import {
   abortStagedOrcadMigrationCatalogDurably,
   commitStagedOrcadMigrationCatalogDurably,
@@ -15,7 +20,15 @@ import {
 } from './orcad-migration-catalog-import'
 import { OrcaRuntimeWithResolveWaiter } from './orca-runtime-resolve-waiter'
 import type { RuntimeStore } from './runtime-store-contract'
-import type { Store } from '../persistence'
+
+type MigrationStoreKey =
+  | 'stageOrcadMigrationCatalog'
+  | 'commitStagedOrcadMigrationCatalog'
+  | 'stageOrcadMigrationSnapshotChunk'
+  | 'stageOrcadMigrationBlobChunk'
+  | 'abortStagedOrcadMigrationCatalog'
+  | 'getOrcadMigrationCatalogState'
+  | 'flushPendingOrThrowAsync'
 
 /** The destination half of a dormant catalog migration; every mutation is flushed before it answers. */
 export class OrcaRuntimeWithMigrationCatalog extends OrcaRuntimeWithResolveWaiter {
@@ -32,7 +45,7 @@ export class OrcaRuntimeWithMigrationCatalog extends OrcaRuntimeWithResolveWaite
 
   async commitStagedOrcadMigrationCatalog(
     manifest: OrcadMigrationManifest,
-    options: { signal?: AbortSignal } = {}
+    options: { signal?: AbortSignal; expectedBlobs?: readonly OrcadMigrationBlobDescriptor[] } = {}
   ): Promise<OrcadMigrationCatalogState> {
     return commitStagedOrcadMigrationCatalogDurably({
       store: this.requireMigrationStore(
@@ -41,6 +54,7 @@ export class OrcaRuntimeWithMigrationCatalog extends OrcaRuntimeWithResolveWaite
       ),
       manifest,
       signal: options.signal,
+      expectedBlobs: options.expectedBlobs,
       onDurableCommit: () => {
         this.invalidateResolvedWorktreeCache()
         this.notifyReposChanged()
@@ -51,9 +65,18 @@ export class OrcaRuntimeWithMigrationCatalog extends OrcaRuntimeWithResolveWaite
   stageOrcadMigrationSnapshotChunk(
     request: OrcadMigrationSnapshotChunkRequest
   ): OrcadMigrationSnapshotChunkResult {
-    return this.requireMigrationStore(
-      'stageOrcadMigrationSnapshotChunk'
-    ).stageOrcadMigrationSnapshotChunk(request)
+    // SAFETY: The virtual Store may differ from the checked Store; preserve its native failure.
+    return this.requireMigrationStore('stageOrcadMigrationSnapshotChunk')
+      .stageOrcadMigrationSnapshotChunk!(request)
+  }
+
+  stageOrcadMigrationBlobChunk(
+    request: OrcadMigrationBlobChunkRequest
+  ): OrcadMigrationBlobChunkResult {
+    // SAFETY: The virtual Store may differ from the checked Store; preserve its native failure.
+    return this.requireMigrationStore('stageOrcadMigrationBlobChunk').stageOrcadMigrationBlobChunk!(
+      request
+    )
   }
 
   async abortStagedOrcadMigrationCatalog(
@@ -77,10 +100,8 @@ export class OrcaRuntimeWithMigrationCatalog extends OrcaRuntimeWithResolveWaite
     })
   }
 
-  /** A partial store (tests, headless hosts) lacks some optional methods; refuse rather than half-run. */
-  private requireMigrationStore<K extends keyof RuntimeStore & keyof Store>(
-    ...methods: K[]
-  ): Pick<Store, K> {
+  // The capability check covers the captured Store, not a different virtual return.
+  private requireMigrationStore(...methods: MigrationStoreKey[]): RuntimeStore {
     const store = this.store
     if (!store || methods.some((method) => typeof store[method] !== 'function')) {
       throw new Error('runtime_unavailable')

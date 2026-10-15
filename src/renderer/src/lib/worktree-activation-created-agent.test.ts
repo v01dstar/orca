@@ -3,8 +3,9 @@ import { getDefaultSettings } from '../../../shared/constants'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from './worktree-activation'
 import { ensureWebRuntimeWorktreeTerminalAfterWake } from './web-runtime-worktree-terminal-after-wake'
-import { resetWebSessionTabsSnapshotFreshnessForTests } from '@/runtime/web-session-tabs-sync'
+import { resetWebSessionTabsSnapshotFreshnessForTests } from '@/runtime/web-session-tabs-sync/tracking-lifecycle'
 import { resetWebRuntimeWakeTerminalRespawnForTests } from '@/runtime/web-runtime-wake-terminal-respawn'
+import { rememberEmptyHostAnswerForTests } from '@/runtime/web-session-tabs-sync/host-terminal-count-fixture'
 import {
   makeCreatedAgentWorktree as makeWorktree,
   seedAlreadyActiveWorktree,
@@ -494,7 +495,8 @@ describe('activateAndRevealWorktree', () => {
       }))
     })
 
-    const { shouldApplyWebSessionTabsSnapshot } = await import('@/runtime/web-session-tabs-sync')
+    const { shouldApplyWebSessionTabsSnapshot } =
+      await import('@/runtime/web-session-tabs-sync/tracking-decisions')
     shouldApplyWebSessionTabsSnapshot(
       {
         worktree: worktree.id,
@@ -598,6 +600,7 @@ describe('activateAndRevealWorktree', () => {
       }))
     })
 
+    rememberEmptyHostAnswerForTests('web-runtime-1', worktree.id)
     ensureWebRuntimeWorktreeTerminalAfterWake(worktree.id)
     await new Promise((resolve) => setTimeout(resolve, 0))
 
@@ -658,6 +661,7 @@ describe('activateAndRevealWorktree', () => {
       }))
     })
 
+    rememberEmptyHostAnswerForTests('owner-runtime', worktree.id)
     ensureWebRuntimeWorktreeTerminalAfterWake(worktree.id)
     await new Promise((resolve) => setTimeout(resolve, 0))
 

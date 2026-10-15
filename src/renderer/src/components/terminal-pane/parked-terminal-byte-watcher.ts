@@ -20,7 +20,7 @@ import {
   readInFlightCommandCodeTurn
 } from './parked-terminal-command-status'
 import { subscribeToPtyData } from './pty-data-sidecar-subscriptions'
-import { createPtyOutputProcessor } from './pty-transport'
+import { createPtyOutputProcessor } from './pty-output-processor'
 import { isRendererHiddenPtyDeliveryGateEnabled } from './terminal-hidden-delivery-gate'
 import {
   isMainTerminalSideEffectAuthorityForPty,
@@ -137,12 +137,7 @@ export function startParkedTerminalByteWatcher(
       }
     },
     onBell: (): void => {
-      const state = useAppStore.getState()
-      state.markWorktreeUnread(worktreeId)
-      state.markTerminalTabUnread(tabId, 'terminal-bell')
-      if (state.settings?.experimentalTerminalAttention === true) {
-        state.markTerminalPaneUnread(paneKey, 'terminal-bell')
-      }
+      useAppStore.getState().markTerminalBell({ worktreeId, tabId, paneKey })
       // Why: agents emit BEL in the same burst as working→idle, so delay only the OS notification to let the richer completion notification win.
       pendingBellNotification = true
       if (!hasPendingAgentTaskCompleteNotification()) {

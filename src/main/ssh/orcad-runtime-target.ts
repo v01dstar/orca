@@ -1,6 +1,6 @@
 import type { NodeRuntimeTarget } from '../../shared/node-runtime-pin'
 import { resolveOrcadDeploymentTargetFacts } from './orcad-deployment-target'
-import { OrcadHostUnsupportedError } from './orcad-host-unavailable'
+import { OrcadHostUnsupportedError } from '../orcad/orcad-host-unavailable'
 import type { OrcadHostTransport } from './orcad-host-transport'
 import { pinnedRuntimeTargetForHost } from './pinned-runtime-host-target'
 import type { RemoteHostPlatform } from './ssh-remote-platform'

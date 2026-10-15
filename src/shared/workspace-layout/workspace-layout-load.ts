@@ -22,6 +22,7 @@ import {
 } from './workspace-layout-load-bindings'
 import { diffStoredSession } from './workspace-layout-load-report'
 import type {
+  LoadedWorkspaceLayout,
   WorkspaceLayoutLoadContext,
   WorkspaceLayoutLoadResult
 } from './workspace-layout-load-types'
@@ -120,6 +121,16 @@ export function loadWorkspaceLayout(
   stored: WorkspaceSessionState,
   context: WorkspaceLayoutLoadContext
 ): WorkspaceLayoutLoadResult {
+  const loaded = loadWorkspaceLayoutWithoutReport(hostId, stored, context)
+  return { ...loaded, changes: diffStoredSession(stored, saveWorkspaceLayout(loaded)) }
+}
+
+/** The same load without the save and diff, for a reader that never writes the result back. */
+export function loadWorkspaceLayoutWithoutReport(
+  hostId: ExecutionHostId,
+  stored: WorkspaceSessionState,
+  context: WorkspaceLayoutLoadContext
+): LoadedWorkspaceLayout {
   // The Loader edits its own copy; the Store's object stays untouched.
   const session = structuredClone(stored)
   const desktopView: DesktopLayoutView = {
@@ -174,6 +185,5 @@ export function loadWorkspaceLayout(
   loadLeaves(layout, { session, layouts }, { view: desktopView, facts, carried }, context)
   unbindDuplicateTerminals(layout)
   layout = applyLegacySurfaceTombstones(layout, session, carried)
-  const loaded = { layout, desktopView, facts, carried }
-  return { ...loaded, changes: diffStoredSession(stored, saveWorkspaceLayout(loaded)) }
+  return { layout, desktopView, facts, carried }
 }

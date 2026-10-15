@@ -30,6 +30,7 @@ export function createSshIpcMocks(): SshIpcMocks {
       disconnectConnection: vi.fn(),
       reconnect: vi.fn(),
       getConnection: vi.fn(),
+      hasCachedCredential: vi.fn().mockReturnValue(false),
       getState: vi.fn(),
       disconnectAll: vi.fn(),
       setCallbacks: vi.fn(),
@@ -53,6 +54,7 @@ export function createSshIpcMocks(): SshIpcMocks {
       removeForwardAndWait: vi.fn(),
       listForwards: vi.fn().mockReturnValue([]),
       removeAllForwards: vi.fn(),
+      closeAll: vi.fn(),
       dispose: vi.fn(),
       setCallbacks: vi.fn(),
       callbacksRef: { current: null as unknown }
@@ -149,15 +151,6 @@ export function createSshIpcMocks(): SshIpcMocks {
           return mockMux
         }
       }
-    },
-    pty: {
-      clearPtyOwnershipForConnection: vi.fn(),
-      clearProviderPtyState: vi.fn(),
-      deletePtyOwnership: vi.fn(),
-      setPtyOwnership: vi.fn(),
-      getPtyIdsForConnection: vi.fn().mockReturnValue([]),
-      isCurrentPtyExit: vi.fn().mockReturnValue(true),
-      isRendererPtyOutputPaused: vi.fn().mockReturnValue(false)
     },
     sshPortForward: {
       SshPortForwardManager: class MockPortForwardManager {

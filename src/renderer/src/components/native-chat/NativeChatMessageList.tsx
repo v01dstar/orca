@@ -15,7 +15,7 @@ import { nativeChatTaskListPredecessors } from './native-chat-task-list-history'
 import { NativeChatTaskList } from './NativeChatTaskList'
 import { useNativeChatTurnStatus } from './use-native-chat-turn-status'
 import { NativeChatAwaitingInputRow } from './NativeChatAwaitingInputRow'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
+import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import type { NativeChatTurnActivity } from '../../../../shared/native-chat-turn-activity'
 import { NativeChatTurnActivityLine } from './NativeChatTurnActivityLine'
 import {

@@ -28,6 +28,7 @@ import {
   testingTargets
 } from './ssh-connect-attempt-registry'
 import { createSshConnectionCallbacks } from './ssh-connection-state-callbacks'
+import { resetSshCredentialDeclinesForTests } from '../ssh/ssh-credential-decline'
 import { registerSshConnectionHandlers } from './ssh-connection-handlers'
 import {
   registerPowerMonitorReconnect,
@@ -53,6 +54,7 @@ import { disposeOrcadManagedTunnels } from '../ssh/orcad-managed-tunnel'
 import { reconcileManagedOrcadSshTargets } from '../ssh/orcad-retained-source'
 import { installOrcadMigrationScrollbackRetention } from '../ssh/orcad-migration-scrollback-retention-wiring'
 import { getAppEnvironment } from '../../shared/app-environment'
+import { registerLegacyRelayBridgeIpc } from '../ssh/legacy-relay-bridge/legacy-relay-bridge-ipc'
 
 const SSH_IPC_CHANNELS = [
   'ssh:listTargets',
@@ -68,7 +70,6 @@ const SSH_IPC_CHANNELS = [
   'ssh:getState',
   'ssh:needsPassphrasePrompt',
   'ssh:testConnection',
-  'ssh:endOldRelayTerminals',
   'ssh:addPortForward',
   'ssh:updatePortForward',
   'ssh:removePortForward',
@@ -124,6 +125,12 @@ export function registerSshHandlers(
   registerSshTargetCrudHandlers()
   registerSshConnectionHandlers()
   registerSshPortForwardHandlers()
+  // COMPAT(legacy-relay-bridge): terminals an older Orca's relay still runs.
+  registerLegacyRelayBridgeIpc({
+    store,
+    getMainWindow: getCurrentMainWindow,
+    connection: (targetId) => connectionManager?.getConnection(targetId) ?? null
+  })
 
   return {
     connectionManager: connectionManager!,
@@ -145,6 +152,7 @@ export async function resetSshHandlerStateForTests(): Promise<void> {
   testingTargets.clear()
   testConnectionProbes.clear()
   credentialRequestedForTarget.clear()
+  resetSshCredentialDeclinesForTests()
   quitTeardownStartGate.resetForTests()
   resetSshShutdownDrain()
 

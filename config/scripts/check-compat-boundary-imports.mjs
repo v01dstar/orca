@@ -33,7 +33,11 @@ function importTarget(file, specifier) {
   return alias ? `src/renderer/src/${normalized.slice(alias.length)}` : null
 }
 
-export function assessCompatBoundaryImports(sources, folders = COMPAT_FOLDERS) {
+export function assessCompatBoundaryImports(
+  sources,
+  folders = COMPAT_FOLDERS,
+  specifiersFor = collectModuleSpecifiers
+) {
   const violations = []
   const folderNames = folders.map(({ folder }) => path.posix.basename(folder))
   for (const [file, contents] of sources) {
@@ -44,7 +48,7 @@ export function assessCompatBoundaryImports(sources, folders = COMPAT_FOLDERS) {
     ) {
       continue
     }
-    for (const specifier of collectModuleSpecifiers(file, contents)) {
+    for (const specifier of specifiersFor(file, contents)) {
       const target = importTarget(file, specifier)?.replace(/\.[cm]?[jt]sx?$/, '')
       const compat = folders.find(
         ({ folder }) => target === folder || target?.startsWith(`${folder}/`)
@@ -64,8 +68,12 @@ export function assessCompatBoundaryImports(sources, folders = COMPAT_FOLDERS) {
   return violations.sort()
 }
 
-export function main(root) {
-  const violations = assessCompatBoundaryImports(collectProcessHostSources(root))
+export function main(root, sharedSources, specifiersFor = collectModuleSpecifiers) {
+  const violations = assessCompatBoundaryImports(
+    sharedSources ?? collectProcessHostSources(root),
+    COMPAT_FOLDERS,
+    specifiersFor
+  )
   if (violations.length > 0) {
     console.error(`[compat-boundary-imports]\n${violations.join('\n')}`)
     return 1

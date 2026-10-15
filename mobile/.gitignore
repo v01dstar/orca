@@ -19,3 +19,4 @@ web-build/
 
 # Fork: local xcodebuild -derivedDataPath output
 /build-ios/
+.cache/typechecks/

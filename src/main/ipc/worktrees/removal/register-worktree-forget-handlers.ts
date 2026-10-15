@@ -9,7 +9,8 @@ import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/repo-types'
 import { isFolderRepo } from '../../../../shared/repo-kind'
-import { getLocalPtyProvider, clearProviderPtyState } from '../../pty'
+import { getLocalPtyProvider } from '../../pty/provider/registry'
+import { clearProviderPtyState } from '../../pty/provider/state-cleanup'
 import { killAllProcessesForWorktree } from '../../../runtime/worktree-teardown'
 import { invalidateAuthorizedRootsCache } from '../../registered-worktree-roots-cache'
 import { preservedBranchCleanupScopeKey } from '../../../../shared/preserved-branch-cleanup'
@@ -34,6 +35,11 @@ import {
   preservedBranchCleanupByScope
 } from './preserved-branch-cleanup'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
+import {
+  assertWslMoveProjectWritable,
+  assertWslMoveRepoWritable,
+  isWslMoveSourceHost
+} from '../../../persistence/moving-wsl-projects/wsl-move-scope-guard'
 
 export function registerWorktreeForgetHandlers(context: WorktreeIpcContext): void {
   const { mainWindow, store, runtime, worktreeRemovalsInFlight } = context
@@ -52,6 +58,11 @@ export function registerWorktreeForgetHandlers(context: WorktreeIpcContext): voi
         )
       }
       const repo = repoOwner.kind === 'resolved' ? repoOwner.repo : undefined
+      if (repo) {
+        assertWslMoveRepoWritable(store, repo)
+      } else if (isWslMoveSourceHost(args.hostId)) {
+        assertWslMoveProjectWritable(store, { repoId })
+      }
       // Repo-first (unlike owner resolution below) so this key matches worktrees:remove's; meta only covers ownerless forgets.
       const inFlightKey = getWorktreeRemovalInFlightKey(
         args.worktreeId,
@@ -165,6 +176,7 @@ export function registerWorktreeForgetHandlers(context: WorktreeIpcContext): voi
       if (!repo) {
         throw new Error(`Repo not found: ${repoId}`)
       }
+      assertWslMoveRepoWritable(store, repo)
       if (isFolderRepo(repo)) {
         throw new Error('Folder workspaces do not have local Git branches.')
       }

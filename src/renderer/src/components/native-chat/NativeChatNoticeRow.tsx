@@ -42,11 +42,14 @@ const HOST_STATUS_WORDS: Record<AgentSessionHostStatusPresentation, () => string
 
 export function NativeChatNoticeRow({
   block,
+  messageId,
   agentName,
   onLinkClick,
   allowFileUriLinks = false
 }: {
   block: NativeChatTextBlock
+  /** The transcript row's message, so a plan's code blocks keep their wrap past the row's mount. */
+  messageId?: string
   agentName?: string
   onLinkClick?: CommentMarkdownLinkClickHandler
   allowFileUriLinks?: boolean
@@ -97,6 +100,7 @@ export function NativeChatNoticeRow({
         </CardHeader>
         <CardContent className="px-4 text-sm leading-relaxed text-foreground">
           <NativeChatMarkdown
+            rowKey={messageId === undefined ? undefined : `plan:${messageId}`}
             content={block.text}
             variant="document"
             renderCodeBlock={NativeChatCodeBlock}

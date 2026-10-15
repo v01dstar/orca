@@ -24,6 +24,7 @@ export type SshConnectionManagerMock = {
   disconnectConnection: Mock
   reconnect: Mock
   getConnection: Mock
+  hasCachedCredential: Mock
   getState: Mock
   disconnectAll: Mock
   setCallbacks: Mock
@@ -49,6 +50,7 @@ export type SshPortForwardManagerMock = {
   removeForwardAndWait: Mock
   listForwards: Mock
   removeAllForwards: Mock
+  closeAll: Mock
   dispose: Mock
   setCallbacks: Mock
   callbacksRef: MockCallbacksRef
@@ -79,7 +81,6 @@ export type SshIpcMockModules = {
   sshConnectionStore: SshIpcMockModule
   sshConnectionManager: SshIpcMockModule
   sshChannelMultiplexer: SshIpcMockModule
-  pty: SshIpcMockModule
   sshPortForward: SshIpcMockModule
   sshPortScanner: SshIpcMockModule
 }

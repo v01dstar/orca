@@ -419,8 +419,8 @@ export async function evaluateShadowGate(config, {
       appliedPaceWindowMs: config.drainAppliedPaceWindowMs,
       targetHosts: config.targetHosts,
       settledAt: config.drainSettledAt || null,
-      // Isolate to restart-safe, which includes the quiet the restart wait holds after the cell
-      // empties: (ceil(pace / 5 s) + 1) samples of 5 s.
+      // Isolate to restart-safe: the later of the pace window's end and the cell emptying, plus
+      // one 5 s sample.
       settledAfterSeconds: config.drainStartedAt && config.drainSettledAt
         ? Math.round((Date.parse(config.drainSettledAt) - Date.parse(config.drainStartedAt)) / 1000)
         : null

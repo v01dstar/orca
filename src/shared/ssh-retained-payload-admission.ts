@@ -8,7 +8,6 @@ import type {
   SshPlainSshMode,
   SshProviderEpoch
 } from './ssh-types'
-import { admitSshOldRelayProcesses } from './ssh-old-relay-processes-admission'
 import {
   SSH_MANAGED_SERVER_PHASES,
   SSH_MANAGED_SERVER_RELAY_REASONS,
@@ -159,11 +158,9 @@ function admitSshManagedServerStatus(value: unknown): { managedServer?: SshManag
         ? { detail: clampUtf8TextPrefix(detail, SSH_CONNECTION_ERROR_MAX_UTF8_BYTES) }
         : {}),
       ...(isNonNegativeSafeInteger(terminals) ? { terminals } : {}),
-      ...('offerMove' in value && value.offerMove === true ? { offerMove: true } : {}),
       ...('terminalsElsewhere' in value && value.terminalsElsewhere === true
         ? { terminalsElsewhere: true }
-        : {}),
-      ...admitSshOldRelayProcesses('oldRelays' in value ? value.oldRelays : undefined)
+        : {})
     }
   }
 }

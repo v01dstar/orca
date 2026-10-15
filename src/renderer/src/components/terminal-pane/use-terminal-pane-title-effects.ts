@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect } from 'react'
 import { useAppStore } from '../../store'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
 import {
   applyTerminalPaneAttentionToManager,
   subscribeTerminalPaneAttention
@@ -26,9 +25,6 @@ import type { TerminalPaneCloseController } from './use-terminal-pane-close-acti
 
 export function useTerminalPaneTitleEffects(controller: TerminalPaneCloseController): void {
   const {
-    clearTerminalPaneUnread,
-    clearTerminalTabUnread,
-    clearWorktreeUnread,
     chatLeafId,
     clearedScrollbackLeafIdsRef,
     containerRef,
@@ -55,26 +51,6 @@ export function useTerminalPaneTitleEffects(controller: TerminalPaneCloseControl
     tabId,
     worktreeId
   } = controller
-
-  useEffect(() => {
-    const container = containerRef.current
-    if (!container) {
-      return
-    }
-    const onPointerDown = (event: PointerEvent): void => {
-      clearTerminalTabUnread(tabId)
-      clearWorktreeUnread(worktreeId)
-      const paneElement =
-        event.target instanceof Element ? event.target.closest('.pane[data-leaf-id]') : null
-      const leafId = paneElement?.getAttribute('data-leaf-id')
-      if (leafId) {
-        clearTerminalPaneUnread(makePaneKey(tabId, leafId))
-      }
-    }
-    container.addEventListener('pointerdown', onPointerDown, { capture: true })
-    return () => container.removeEventListener('pointerdown', onPointerDown, { capture: true })
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-  }, [tabId, worktreeId, clearTerminalTabUnread, clearTerminalPaneUnread, clearWorktreeUnread])
 
   const applyTerminalPaneAttention = useCallback(() => {
     const manager = managerRef.current

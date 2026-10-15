@@ -166,6 +166,7 @@ export function sendQueuedStructuredAgentMessage(
             origin: 'client',
             payloadFingerprint: row.fingerprint,
             body: row.body,
+            ...(row.options ? { options: row.options } : {}),
             fence: ctx.fence,
             handoverRecorded: true
           },

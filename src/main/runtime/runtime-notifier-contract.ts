@@ -1,7 +1,9 @@
+import type { RuntimeFileOpenPosition } from '../../shared/runtime-file-contracts'
 import type { AgentLaunchPaneVerdictEvent } from '../../shared/agent-launch-pane-verdict'
 import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
 import type {
   AgentLaunchTabPublished,
+  AgentLaunchTabViewerRule,
   AgentLaunchTabPublishRequest
 } from '../../shared/agent-launch-tab-publication'
 import type { TerminalPaneSplitSource } from '../../shared/feature-education-telemetry'
@@ -70,6 +72,7 @@ export type RuntimeNotifier = {
       activate?: boolean
       presentation?: RuntimeTerminalPresentation
       surfaceOwner?: false
+      agentLaunchViewer?: AgentLaunchTabViewerRule
       tabId?: string
       leafId?: string
       splitFromLeafId?: string
@@ -124,7 +127,8 @@ export type RuntimeNotifier = {
     filePath: string,
     relativePath: string,
     runtimeEnvironmentId?: string | null,
-    navigation?: RuntimeNavigationTarget
+    navigation?: RuntimeNavigationTarget,
+    position?: RuntimeFileOpenPosition
   ): void
   openDiff?(
     worktreeId: string,

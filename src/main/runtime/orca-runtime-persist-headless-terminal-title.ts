@@ -1,5 +1,5 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
-import { OrcaRuntimeWithMoveHeadlessMobileSessionTab } from './orca-runtime-move-headless-mobile-session-tab'
+import { RuntimeHeadlessTabGroups } from './session-tabs/headless-tab-group-moves'
 import type {
   RuntimeMarkdownReadTabResult,
   RuntimeMarkdownSaveTabResult,
@@ -17,7 +17,7 @@ import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-option
 import { resolveWorktreeHostRouting } from './worktree-launch-host-repo'
 import { isFloatingWorkspaceSelector } from '../../shared/floating-workspace-worktree'
 
-export class OrcaRuntimeWithPersistHeadlessTerminalTitle extends OrcaRuntimeWithMoveHeadlessMobileSessionTab {
+export abstract class OrcaRuntimeWithPersistHeadlessTerminalTitle extends RuntimeHeadlessTabGroups {
   // Persist a manual terminal rename so a headless rebuild keeps the title
   // instead of reverting to the generated/default one.
   protected persistHeadlessTerminalTitle(
@@ -101,7 +101,7 @@ export class OrcaRuntimeWithPersistHeadlessTerminalTitle extends OrcaRuntimeWith
     if (!snapshot) {
       return ids
     }
-    const liveBrowserTabsByPageId = this.getLiveBrowserTabsByPageId(snapshot.worktree)
+    const liveBrowserTabsByPageId = this.getListedBrowserTabsByPageId(snapshot.worktree)
     for (const tab of snapshot.tabs) {
       if (tab.type === 'browser') {
         const liveTab = tab.browserPageId

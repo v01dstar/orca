@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
+import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import type { NativeChatDeliveryNotice } from './NativeChatMessageRow'
 import { NativeChatRewindAction } from './NativeChatRewindAction'
@@ -119,6 +119,7 @@ export function NativeChatUserMessageRow({
               onRefolded={onRefolded}
             >
               <NativeChatMarkdown
+                rowKey={message.id}
                 content={markdown}
                 variant="document"
                 className="text-sm"

@@ -181,6 +181,7 @@ export async function maybeQueueStructuredAgentSessionSend(
     envelope: { clientOperationId: string }
     body: AgentJournalMessageItem
     delivery?: 'queue-if-active'
+    options?: Readonly<Record<string, string>>
     /** A person's send at a chat surface: every attachment it names must still be stored. */
     userSend?: true
     /** A person's message the host sends for them. */
@@ -233,6 +234,8 @@ export async function maybeQueueStructuredAgentSessionSend(
         // In the session that will send it: the reducer aliases the provider's echo by exactly this.
         fingerprint: agentSessionSendBodyFingerprint(ctx.sessionId, params.body),
         hostInstance: structuredAgentSessionHostInstance(),
+        // Applied when the card goes out, to the turn it starts.
+        ...(params.options ? { options: params.options } : {}),
         ...(params.userSend ? { requireAttachments: true } : {})
       },
       ctx.operationReceipt
@@ -357,6 +360,7 @@ export class StructuredAgentSessionQueuedMessageDrain {
           origin: 'host',
           payloadFingerprint: next.fingerprint,
           body: next.body,
+          ...(next.options ? { options: next.options } : {}),
           fence,
           handoverRecorded: true
         },

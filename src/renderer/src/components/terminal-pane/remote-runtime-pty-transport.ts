@@ -45,21 +45,21 @@ import type {
   PtyTransport,
   PtyTransportRecoveryState
 } from './pty-transport-types'
-import { createPtyOutputProcessor } from './pty-transport'
+import { createPtyOutputProcessor } from './pty-output-processor'
 import { isSshSessionGoneError } from './pty-connection/pty-connect-limits'
-import { RuntimeRpcCallError, unwrapRuntimeRpcResult } from '../../runtime/runtime-rpc-client'
+import { RuntimeRpcCallError, unwrapRuntimeRpcResult } from '../../runtime/runtime-rpc-result'
 import {
   getRemoteRuntimePtyEnvironmentId,
   getRemoteRuntimeTerminalHandle,
   runtimeTerminalErrorMessage,
   toRemoteRuntimePtyId
 } from '../../runtime/runtime-terminal-stream'
-import {
-  getRemoteRuntimeTerminalMultiplexer,
-  REMOTE_TERMINAL_SNAPSHOT_TOO_LARGE,
-  type RemoteRuntimeMultiplexedTerminal,
-  type RemoteRuntimeSnapshotOutcome
-} from '../../runtime/remote-runtime-terminal-multiplexer'
+import { getRemoteRuntimeTerminalMultiplexer } from '../../runtime/remote-runtime-terminal-multiplexer'
+import { REMOTE_TERMINAL_SNAPSHOT_TOO_LARGE } from '../../runtime/remote-runtime-terminal-snapshot-state'
+import type {
+  RemoteRuntimeMultiplexedTerminal,
+  RemoteRuntimeSnapshotOutcome
+} from '../../runtime/remote-runtime-terminal-multiplexer-types'
 import {
   toRuntimeTerminalWorktreeSelector,
   toRuntimeWorktreeSelector
@@ -80,14 +80,17 @@ import {
 } from '@/runtime/agent-session-create-operation'
 import { replaceFitOverridePtyId, setFitOverride } from '@/lib/pane-manager/mobile-fit-overrides'
 import { replaceDriverPtyId, setDriverForPty } from '@/lib/pane-manager/mobile-driver-state'
-import { isWebTerminalSurfaceTabId, toHostSessionTabId } from '@/runtime/web-terminal-surface-id'
+import {
+  isWebTerminalSurfaceTabId,
+  toHostSessionTabId
+} from '../../../../shared/terminal-surface-id'
 import { listRemoteRuntimeSessionTabsAfterCurrentInFlight } from '@/runtime/remote-runtime-session-tabs-inflight'
 import { subscribeAcceptedWebSessionTerminalHandle } from '@/runtime/web-session-terminal-handle-events'
 import { hostSnapshotAffirmsWorktreeContents } from '@/runtime/host-session-snapshot-authority'
 import { runRemoteAgentSessionLaunch } from '@/runtime/remote-agent-session-launch'
 import { useAppStore } from '@/store'
 import { recordWebAgentSessionHandoff } from '@/runtime/web-agent-session-handoff'
-import { refreshWebRuntimeSessionTabsSnapshot } from '@/runtime/web-runtime-session'
+import { refreshWebRuntimeSessionTabsSnapshot } from '@/runtime/web-runtime-session-snapshot'
 import {
   bufferPtyShutdownData,
   bufferPtyShutdownReplayData,
@@ -185,7 +188,6 @@ function isRemoteTerminalGoneMessage(message: string): boolean {
   return (
     message.includes('terminal_exited') ||
     message.includes('terminal_gone') ||
-    message.includes('no_connected_pty') ||
     message.toLocaleLowerCase('en-US').includes('explicitly killed')
   )
 }
@@ -1996,6 +1998,13 @@ export function createRemoteRuntimePtyTransport(
       retireRemoteTerminalId()
       return
     }
+    if (message.includes('no_connected_pty')) {
+      // Why: the host also sends this when its window has not mounted the pane yet, so it proves
+      // nothing about exit; back off and resubscribe, which asks the host to mount it again.
+      closeMultiplexedStream()
+      scheduleResubscribeAfterBackoff()
+      return
+    }
     if (isSshSessionGoneError(message)) {
       // Why: only the HUB may replace its expired SSH pane; a paired viewer must never fall back to
       // client-local SSH. The identity-mismatch suffix is excluded because it means the opposite —
@@ -2007,7 +2016,7 @@ export function createRemoteRuntimePtyTransport(
     }
     const clientError = toRemoteRuntimeClientErrorLike(error)
     if (isRuntimeRpcQueueOverloadError(clientError)) {
-      scheduleCapacityPressureRetry()
+      scheduleResubscribeAfterBackoff()
       return
     }
     if (isRecoverablePaneBindingError(error)) {
@@ -2241,7 +2250,7 @@ export function createRemoteRuntimePtyTransport(
       })
   }
 
-  function scheduleCapacityPressureRetry(): void {
+  function scheduleResubscribeAfterBackoff(): void {
     if (destroyed || !connected || !handle) {
       return
     }
@@ -2447,7 +2456,7 @@ export function createRemoteRuntimePtyTransport(
           resetSameHandleEndReuse()
           if (recoverable) {
             if (retryWithBackoff) {
-              scheduleCapacityPressureRetry()
+              scheduleResubscribeAfterBackoff()
             } else {
               scheduleResubscribeAfterTransportClose()
             }

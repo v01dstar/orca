@@ -30,7 +30,8 @@ export const SERVE_COMMAND_SPECS: CommandSpec[] = [
       'Exits with code 3, without starting anything, when another Orca already serves this profile or cannot be shown to have stopped.',
       'On macOS, after Orca serve aborts at startup (it could not register with Launch Services), later runs from the same environment refuse for 30 minutes with exit code 78. Use --force to try anyway.',
       '--supervise is for service managers (launchd, systemd). Orca serve then restarts the server itself with growing delays instead of exiting when it stops, waits while an update replaces the app, and waits while another Orca serves this profile. After 6 failures in 15 minutes it gives up and exits with code 0 so the manager stops too, and later supervised runs refuse until a new build is installed or --force is passed. Not available on Windows yet.',
-      '--trusted-issuer-file (absolute path) lets clients authenticate with an assertion signed by a key in that file, as on instabox machines; the file may appear after startup.'
+      '--trusted-issuer-file (absolute path) lets clients authenticate with an assertion signed by a key in that file, as on instabox machines; the file may appear after startup.',
+      'Experimental and off by default: set ORCA_TERMINAL_PROCESS_CEILING=<n> (64 or more) before the terminal host starts to have the OS cap how many processes all terminals together may run (Linux, through a systemd user slice; needs a user manager that outlives logout) or each terminal may run (Windows). `orca serve` reports the ceiling as on or off, with the reason.'
     ],
     examples: [
       'orca serve',
@@ -62,7 +63,8 @@ export const SERVE_COMMAND_SPECS: CommandSpec[] = [
       'macOS writes a LaunchAgent; Linux writes a systemd user unit. Both run `orca serve --supervise --no-pairing` for this profile, so the server restarts with growing delays and gives up after repeated failures instead of looping.',
       'The service never prints a pairing link to its log. Pair clients from the desktop app, or with `orca serve` in a terminal while the service is stopped.',
       'On Linux the service stops at logout unless lingering is on (`loginctl enable-linger`); install reports it.',
-      'Reinstalling replaces the unit and clears a previous give-up. --command defaults to the `orca` command found on PATH. --dry-run prints the unit without installing it.',
+      "Reinstalling replaces the unit and clears a previous give-up. --command defaults to the installed Orca app's `orca` command on PATH (`orca-ide` on Linux) and must not be a launcher tied to one Orca version. --dry-run prints the unit without installing it.",
+      "Needs the Orca app installed on this machine. The `orca` command in an Orca terminal on an SSH host belongs to that connection's server and cannot install a service.",
       'Not available on Windows yet.'
     ],
     examples: ['orca serve service install', 'orca serve service install --port 6768 --dry-run']

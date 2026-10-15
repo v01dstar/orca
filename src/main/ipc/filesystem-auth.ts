@@ -1,5 +1,5 @@
 import { resolve, dirname, basename } from 'node:path'
-import { realpath } from 'node:fs/promises'
+import { lstat, realpath } from 'node:fs/promises'
 import type { Store } from '../persistence'
 import { PATH_OUTSIDE_ALLOWED_DIRECTORIES } from '../../shared/local-file-access'
 import { getAllowedRoots } from './filesystem-allowed-roots'
@@ -44,7 +44,7 @@ export type ResolveAuthorizedPathOptions = {
    * Canonicalize the parent but preserve the leaf so delete/rename target the symlink itself, not its destination (which may live outside allowed roots).
    */
   preserveSymlink?: boolean
-  /** Roots only the desktop window may use (never runtime RPC), checked like any other root. */
+  /** Roots one caller owns outside the store (desktop: floating workspace; runtime: chat scratch). */
   extraRoots?: readonly string[]
 }
 
@@ -129,6 +129,10 @@ async function resolveAuthorizedMissingPath(
       if (!isENOENT(error)) {
         throw error
       }
+      if (await isSymlink(existingAncestor)) {
+        // Why: realpath can't say where a dangling link leads, but a write follows it and creates its target.
+        throw new Error(PATH_ACCESS_DENIED_MESSAGE)
+      }
       const parent = dirname(existingAncestor)
       if (parent === existingAncestor) {
         throw error
@@ -137,6 +141,17 @@ async function resolveAuthorizedMissingPath(
       missingSegments.unshift(basename(existingAncestor))
       existingAncestor = parent
     }
+  }
+}
+
+async function isSymlink(path: string): Promise<boolean> {
+  try {
+    return (await lstat(path)).isSymbolicLink()
+  } catch (error) {
+    if (isENOENT(error)) {
+      return false
+    }
+    throw error
   }
 }
 

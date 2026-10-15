@@ -136,24 +136,6 @@ export type TabsSlice = {
       splitDirection?: TabSplitDirection
     }
   ) => boolean
-  copyUnifiedTabToGroup: (
-    tabId: string,
-    targetGroupId: string,
-    init?: Partial<
-      Pick<
-        Tab,
-        | 'id'
-        | 'entityId'
-        | 'label'
-        | 'generatedLabel'
-        | 'quickCommandLabel'
-        | 'customLabel'
-        | 'color'
-        | 'isPinned'
-      >
-    >
-  ) => Tab | null
-  mergeGroupIntoSibling: (worktreeId: string, groupId: string) => string | null
   setTabGroupSplitRatio: (worktreeId: string, nodePath: string, ratio: number) => void
   reconcileWorktreeTabModel: (worktreeId: string) => {
     renderableTabCount: number

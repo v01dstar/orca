@@ -4,7 +4,8 @@ import { ensureWorktreeHasInitialTerminal } from './worktree-initial-terminal-se
 import type { AppStoreState } from './worktree-activation-test-harness'
 import {
   createMockStore,
-  registerWorktreeActivationReset
+  registerWorktreeActivationReset,
+  createdTabStartups
 } from './worktree-activation-test-harness'
 import { useAppStore } from '@/store'
 import {
@@ -16,12 +17,16 @@ import {
   shouldSkipWebRuntimeWakeTerminalRespawn
 } from '@/runtime/web-runtime-wake-terminal-respawn'
 import { stubRuntimeEnvironmentBridge } from '../runtime/runtime-environment-bridge-fixture'
+import { rememberEmptyHostAnswerForTests } from '@/runtime/web-session-tabs-sync/host-terminal-count-fixture'
+import { resetWebSessionTabsSnapshotFreshnessForTests } from '@/runtime/web-session-tabs-sync/tracking-lifecycle'
+import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 
 registerWorktreeActivationReset()
 
 afterEach(() => {
   vi.unstubAllGlobals()
   resetWebRuntimeWakeTerminalRespawnForTests()
+  resetWebSessionTabsSnapshotFreshnessForTests()
 })
 
 describe('activateAndRevealWorktree', () => {
@@ -195,6 +200,7 @@ describe('activateAndRevealFolderWorkspace', () => {
       revealWorktreeInSidebar: vi.fn()
     } as unknown as Partial<AppStoreState>)
 
+    rememberEmptyHostAnswerForTests('web-runtime-1', folderWorkspaceKey('folder-1'))
     activateAndRevealFolderWorkspace('folder-1', {
       ...activation,
       runtimeEnvironmentId: 'web-runtime-1'
@@ -294,14 +300,12 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     expect(store.setTabCustomTitle).toHaveBeenCalledWith('tab-2', 'Setup', {
       recordInteraction: false
     })
-    expect(store.queueTabStartupCommand).toHaveBeenCalledWith(
-      'tab-2',
+    expect(createdTabStartups(store)['tab-2']).toEqual(
       expect.objectContaining({
         command: expect.stringContaining('bash /tmp/repo/.git/orca/setup-runner.sh')
       })
     )
-    expect(store.queueTabStartupCommand).toHaveBeenCalledWith(
-      'tab-2',
+    expect(createdTabStartups(store)['tab-2']).toEqual(
       expect.objectContaining({
         command: expect.stringContaining('printf')
       })

@@ -74,7 +74,8 @@ import type { JournalItemAppender } from './journal-item-appender'
 import type { JournalLifecycleBatchAppender } from './journal-lifecycle-batch-appender'
 import type { JournalStepWriter } from './journal-step-writer'
 import type { JournalStopMarks } from './journal-stop-marks'
-import { JournalContextController } from './journal-context-controller'
+import type { JournalContextController } from './journal-context-controller'
+import type { JournalStopAcceptor } from './journal-stop-acceptance'
 
 export { AgentSessionJournalError } from './journal-write-guards'
 
@@ -99,6 +100,8 @@ export class AgentSessionJournal {
   /** Draft rows queued while the agent works; never reducer input or owed work. */
   readonly queuedMessages: JournalQueuedMessages
   readonly stopMarks: JournalStopMarks
+  /** A person's Stop accepted (`journal-stop-acceptance.ts`). */
+  readonly stops: JournalStopAcceptor
   readonly context: JournalContextController
 
   constructor(options: AgentSessionJournalOptions) {
@@ -141,12 +144,9 @@ export class AgentSessionJournal {
     this.stepWriter = collaborators.stepWriter
     this.queuedMessages = collaborators.queuedMessages
     this.stopMarks = collaborators.stopMarks
+    this.stops = collaborators.stops
     this.restore = collaborators.restore
-    this.context = new JournalContextController({
-      state: () => this.state,
-      writer: this.rowWriter,
-      cards: this.queuedMessages
-    })
+    this.context = collaborators.context
   }
 
   get epoch(): string {
@@ -211,6 +211,10 @@ export class AgentSessionJournal {
   /** One reduced item's body by its journal key, for a writer revising a row it can name. */
   itemBody = (itemId: string): AgentJournalItemBody | null =>
     this.state.items.get(itemId)?.body ?? null
+
+  /** Host-only: the stopped messages each handed-over send carried, by its client message id. */
+  stoppedHistoryCarried = (): ReadonlyMap<string, readonly string[]> =>
+    this.state.stoppedHistoryCarried
 
   /** One reduced item with its attribution, for a writer that needs the turn a row joined. */
   item = (itemId: string): AgentJournalRenderItem | null => this.state.items.get(itemId) ?? null
@@ -369,13 +373,11 @@ export class AgentSessionJournal {
   }
 
   /** Reject sends accepted but never handed over, optionally only those `which` names. */
-  async rejectQueuedSubmissions(
+  rejectQueuedSubmissions = (
     fence: number,
     rejection: AgentJournalDispatchRejection,
     which?: (submission: AgentJournalSubmission) => boolean
-  ): Promise<string[]> {
-    return rejectJournalQueuedSubmissions(this, fence, rejection, which)
-  }
+  ): Promise<string[]> => rejectJournalQueuedSubmissions(this, fence, rejection, which)
 
   /** The escape hatch for a forked handle and an unreadable schema. It invalidates every cursor;
    *  clients reload. */

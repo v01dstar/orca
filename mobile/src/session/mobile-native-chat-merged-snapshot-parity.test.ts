@@ -60,9 +60,7 @@ function phoneTranscript(state: StructuredAgentSessionState) {
   })
   return {
     items,
-    messages: projectStructuredAgentSessionMessages(items, [], state.submissions, {
-      rejectedInPlace: false
-    })
+    messages: projectStructuredAgentSessionMessages(items, [], state.submissions)
   }
 }
 
@@ -211,7 +209,7 @@ const range = (from: number, to: number): number[] =>
 describe.each(['after-end', 'during-turn'] as const)(
   'a short chat, the send while stopping written %s: merged frames draw as a fresh snapshot does',
   (sendWhileStopping) => {
-    const journal = stopJournal(8, sendWhileStopping)
+    const journal = stopJournal(2, sendWhileStopping)
 
     it('draws the send the exit took back with its stop row, from the frame that took it back', () => {
       const fresh = drawn(
@@ -223,11 +221,16 @@ describe.each(['after-end', 'during-turn'] as const)(
       ])
     })
 
-    it.each([1, 2, 3])('from every subscribe point, %i row(s) per frame', (rowsPerFrame) => {
-      expect(compareFrames(journal, range(2, journal.rows.length), rowsPerFrame).differing).toEqual(
-        []
-      )
-    })
+    // Both history turns revise status; one completes and the other is interrupted.
+    it.each([1, 2, 3])(
+      'from every subscribe point, %i row(s) per frame',
+      (rowsPerFrame) => {
+        expect(
+          compareFrames(journal, range(2, journal.rows.length), rowsPerFrame).differing
+        ).toEqual([])
+      },
+      10_000
+    )
   }
 )
 

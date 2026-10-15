@@ -144,6 +144,7 @@ export function NativeChatDiffCard({
   revealSignal,
   onReveal,
   disclosureKey,
+  initialOpen = false,
   onLinkClick
 }: {
   file: NativeChatEditFile
@@ -152,8 +153,12 @@ export function NativeChatDiffCard({
   onLinkClick?: CommentMarkdownLinkClickHandler
   /** Identity this card's open state is remembered under while it is unmounted. */
   disclosureKey?: string
+  initialOpen?: boolean
 }): React.JSX.Element {
-  const { open: expanded, setOpen: setExpanded } = useNativeChatDisclosure(disclosureKey, false)
+  const { open: expanded, setOpen: setExpanded } = useNativeChatDisclosure(
+    disclosureKey,
+    initialOpen
+  )
   const cardRef = useRef<HTMLDivElement>(null)
   useLayoutEffect(() => {
     if (revealSignal && cardRef.current) {

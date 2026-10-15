@@ -8,8 +8,13 @@ import {
   warnStructuredAgentSessionCreateUnsupported,
   type StructuredAgentSessionCreateSupport
 } from '../native-chat/structured-agent-session-create-support'
+import { isAgentSessionPreSpawnError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import { resolveAgainAfterRefreshOnMissingProgram } from '../native-chat/structured-agent-command-resolution'
 import { structuredAgentRuntimeRegistration } from './structured-agent-runtime-registrations'
-import { resolveHostAgentBaseEnvironment } from './structured-agent-shell-environment'
+import {
+  refreshHostAgentBaseEnvironmentAfterMiss,
+  resolveHostAgentBaseEnvironment
+} from './structured-agent-shell-environment'
 
 type LaunchEnvironmentSettings = Pick<
   GlobalSettings,
@@ -31,17 +36,48 @@ export async function structuredAgentSupportsLaunch(
   worktreeSelector: string,
   runtime: LaunchSupportRuntime
 ): Promise<boolean> {
-  const supportsLaunch = structuredAgentRuntimeRegistration(agent)?.supportsLaunch
-  if (!supportsLaunch) {
+  const check = structuredAgentRuntimeRegistration(agent)?.launchCheck
+  if (!check) {
     return true
   }
   const settings = runtime.requireStore().getSettings()
-  const env = {
+  let worktreePath: Promise<string> | undefined
+  const cwd = () =>
+    (worktreePath ??= runtime
+      .resolveRuntimeFileTarget(worktreeSelector)
+      .then((target) => target.worktree.path))
+  let launch: { command: string; env: Record<string, string> }
+  try {
+    // Resolved as a launch resolves, sharing its refresh, so an agent installed since the shell
+    // was last read counts and a found one never waits.
+    launch = await resolveAgainAfterRefreshOnMissingProgram(
+      async () =>
+        check.resolveLaunch(
+          await resolveHostStructuredAgentLaunchEnvironment(agent, settings),
+          settings
+        ),
+      refreshHostAgentBaseEnvironmentAfterMiss,
+      { env: ({ env }) => env, cwd }
+    )
+  } catch (error) {
+    // An unrunnable Command setting is the launch's refusal to state, not a terminal.
+    if (isAgentSessionPreSpawnError(error)) {
+      return true
+    }
+    throw error
+  }
+  return check.supportsVersion({ ...launch, cwd: await cwd() })
+}
+
+/** The environment a new local chat launch starts from, before its account binding. */
+export async function resolveHostStructuredAgentLaunchEnvironment(
+  agent: string,
+  settings: LaunchEnvironmentSettings
+): Promise<Record<string, string>> {
+  return {
     ...(await resolveHostAgentBaseEnvironment(settings)),
     ...(isTuiAgent(agent) ? resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv) : {})
   }
-  const cwd = (await runtime.resolveRuntimeFileTarget(worktreeSelector)).worktree.path
-  return supportsLaunch({ cwd, env, commandSettings: settings })
 }
 
 /** `agentSession.createSupport` on this host: every refusal it can know before spawning. The

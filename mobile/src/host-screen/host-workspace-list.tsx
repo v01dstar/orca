@@ -1,4 +1,4 @@
-import { Pressable, RefreshControl, SectionList, Text, View } from 'react-native'
+import { Platform, Pressable, RefreshControl, SectionList, Text, View } from 'react-native'
 import { ChevronDown, ChevronRight, Pin } from 'lucide-react-native'
 import { AuthFailedBanner } from '../components/AuthFailedBanner'
 import { HostDiagnosticsLink } from '../components/HostDiagnosticsLink'
@@ -72,6 +72,12 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
           onDismiss={() => setDismissedNotice(noticeParam ?? null)}
         />
       )}
+      {state.serverNotice ? (
+        <HostRouteNoticeBanner
+          message={state.serverNotice}
+          onDismiss={() => state.setServerNotice(null)}
+        />
+      ) : null}
 
       {/* An action that did not happen. Above the list and dismissible, because the list, the
           header and the confirm it re-opens all have to stay on screen. */}
@@ -89,11 +95,11 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
           <MobileSearchField
             value={state.search}
             onChangeText={state.setSearch}
-            placeholder="Search worktrees…"
+            placeholder="Search workspaces…"
             autoFocus
             // Why: new key per open remounts the focus effect across rapid toggles so the keyboard reappears.
             focusKey={state.showSearch}
-            accessibilityLabel="Search worktrees"
+            accessibilityLabel="Search workspaces"
           />
         </View>
       )}
@@ -114,9 +120,10 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
           sections={sections}
           keyExtractor={(w) => w.sectionListKey ?? getWorktreeRowIdentity(w)}
           stickySectionHeadersEnabled={false}
-          // Why: keep the search IME up while tapping clear / scrolling results.
+          // Why: keep the search IME up while tapping clear.
           keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag"
+          // Why: react-native-web dismisses on-drag on any scroll, and a narrowing search fires one.
+          keyboardDismissMode={Platform.OS === 'web' ? 'none' : 'on-drag'}
           onScrollToIndexFailed={activeWorktreeScroll.onScrollToIndexFailed}
           // Why: edge-to-edge under the system nav bar; insets.bottom keeps the last row above it.
           contentContainerStyle={[

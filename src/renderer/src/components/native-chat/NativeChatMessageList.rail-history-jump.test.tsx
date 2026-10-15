@@ -113,6 +113,16 @@ describe('jumping from the rail while following the end', () => {
   let lastEventScrollTop = 0
 
   beforeEach(() => {
+    vi.useFakeTimers({
+      toFake: [
+        'Date',
+        'performance',
+        'setTimeout',
+        'clearTimeout',
+        'requestAnimationFrame',
+        'cancelAnimationFrame'
+      ]
+    })
     const undoLayout = stubLayout({ scrollGeometry: true, offsetChain: true })
     const stubbedHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetHeight')
     restore = [
@@ -169,6 +179,7 @@ describe('jumping from the rail while following the end', () => {
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     vi.restoreAllMocks()
     Object.defineProperty(layout, 'aboveTranscriptPx', {
       configurable: true,
@@ -202,8 +213,7 @@ describe('jumping from the rail while following the end', () => {
       fireEvent.scroll(element)
     }
     await act(async () => {
-      await new Promise<void>((resolve) => setTimeout(resolve, 0))
-      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+      vi.advanceTimersByTime(16)
     })
   }
 

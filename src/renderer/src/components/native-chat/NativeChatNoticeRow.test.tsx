@@ -3,12 +3,14 @@ import '@testing-library/jest-dom/vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { projectStructuredItemsToNativeChat } from '../../../../shared/structured-agent-session-projection'
+import type { AgentSessionFailureFact } from '../../../../shared/agent-session-failure'
 import type { AgentJournalStatusItem } from '../../../../shared/agent-session-journal-types'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { MessageRow } from './NativeChatMessageRow'
 import { NativeChatNoticeRow } from './NativeChatNoticeRow'
 import { i18n } from '@/i18n/i18n'
 import { agentSessionFailureWords } from '../../../../shared/agent-session-failure-words'
+import { agentSessionFailureFact } from '../../../../shared/agent-session-failure'
 import {
   NativeChatOrcaStopContext,
   type NativeChatOrcaStopView
@@ -344,6 +346,24 @@ describe('notice rows', () => {
       expect(screen.getByText('Future host guidance')).toBeInTheDocument()
     }
   )
+  it("shows the host's words for a background task the agent would not stop, as an older client does", async () => {
+    await i18n.changeLanguage('ja')
+    // A client that predates the kind reads no fact, so the row's own text is what it shows.
+    renderStatus(
+      {
+        kind: 'status',
+        ...agentSessionFailureWords(
+          agentSessionFailureFact('backgroundTaskNotStopped', { backgroundStop: 'task' }),
+          { surface: 'row' }
+        )
+      },
+      null,
+      false,
+      false,
+      'Codex'
+    )
+    expect(screen.getByText("The background task wasn't stopped.")).toBeInTheDocument()
+  })
   it('renders compaction as a centered separator', () => {
     renderStatus({ kind: 'status', text: 'Context compacted', presentation: 'compaction' })
     expect(screen.getByRole('separator', { name: 'Context compacted' })).toHaveClass(
@@ -418,4 +438,42 @@ describe('notice rows', () => {
     expect(screen.getByText(words)).toHaveClass('text-chat-foreground-faint', 'text-sm')
     expect(screen.queryByText('Words an older host wrote')).toBeNull()
   })
+})
+
+describe('Codex installation in notice rows', () => {
+  it.each([null, '0.135.0'])(
+    'shows the plain host failure through the ordinary notice row: %s',
+    (installedVersion) => {
+      const failure: AgentSessionFailureFact = {
+        kind: installedVersion === null ? 'cliMissing' : 'startFailed',
+        ...(installedVersion === null
+          ? {}
+          : {
+              refusal: {
+                code: 'agent_session_operation_invalid',
+                details: {
+                  reason: 'attachFailed',
+                  codexInstallation: { installedVersion, minimumVersion: '0.136.0' }
+                }
+              }
+            })
+      }
+      const text = installedVersion
+        ? 'Codex 0.135.0 is too old for chats. Update to 0.136.0 or newer.'
+        : "Codex wasn't found on the computer running this chat. Install it, or check its Command in Settings → Agents."
+      renderStatus(
+        {
+          kind: 'status',
+          tone: 'error',
+          ...agentSessionFailureWords(failure, { agentName: 'Codex', surface: 'row' })
+        },
+        null,
+        false,
+        false,
+        'Codex'
+      )
+      expect(screen.getByText(text)).toBeInTheDocument()
+      expect(screen.queryByRole('button')).toBeNull()
+    }
+  )
 })

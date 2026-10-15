@@ -37,8 +37,7 @@ const testOptions = {
   setupFiles: [
     resolve('config/scripts/vitest-real-agent-home-write-guard.ts'),
     resolve('config/scripts/vitest-bun-node-builtins.ts'),
-    resolve('config/scripts/happy-dom-offscreen-canvas.ts'),
-    resolve('config/scripts/happy-dom-mutation-observer-retention.ts'),
+    resolve('config/scripts/vitest-dom-setup.ts'),
     resolve('config/scripts/vitest-host-ports-setup.ts'),
     resolve('config/scripts/vitest-caller-identity-env-setup.ts')
   ],

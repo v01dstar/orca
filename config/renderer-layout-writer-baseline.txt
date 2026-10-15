@@ -60,7 +60,6 @@
 4 src/renderer/src/store/slices/browser/browser-tab-focus-actions.ts
 2 src/renderer/src/store/slices/browser/create-browser-slice.ts
 1 src/renderer/src/store/slices/direct-ssh-terminal-recovery.ts
-1 src/renderer/src/store/slices/editor/actions/chat-visual-tab-actions.ts
 9 src/renderer/src/store/slices/editor/actions/check-run-details-actions.ts
 7 src/renderer/src/store/slices/editor/actions/close-file-action.ts
 1 src/renderer/src/store/slices/editor/actions/git-status-actions.ts
@@ -96,13 +95,12 @@
 8 src/renderer/src/store/slices/tabs/tabs-label-actions.ts
 10 src/renderer/src/store/slices/tabs/tabs-move-actions.ts
 9 src/renderer/src/store/slices/tabs/tabs-reconciliation.ts
-1 src/renderer/src/store/slices/tabs/tabs-secondary-actions.ts
 4 src/renderer/src/store/slices/tabs/tabs-session-actions.ts
+1 src/renderer/src/store/slices/tabs/tabs-split-ratio-actions.ts
 5 src/renderer/src/store/slices/tabs/tabs-surface.ts
 6 src/renderer/src/store/slices/terminal-orphan-helpers.ts
 4 src/renderer/src/store/slices/terminal-tab-title-batch.ts
 6 src/renderer/src/store/slices/terminals.ts
-5 src/renderer/src/store/slices/worktrees/session/set-active-folder-workspace.ts
 7 src/renderer/src/store/slices/worktrees/session/set-active-worktree.ts
 15 src/renderer/src/store/slices/worktrees/session/worktree-identity-rename-state.ts
 2 src/renderer/src/store/slices/worktrees/session/worktree-slice-lookups.ts
@@ -115,7 +113,7 @@
 1 src/renderer/src/store/terminals/terminal-shutdown-guards.ts
 3 src/renderer/src/store/terminals/terminal-shutdown-state.ts
 1 src/renderer/src/store/terminals/terminal-tab-agent-launch-pane.ts
-2 src/renderer/src/store/terminals/terminal-tab-attention.ts
+2 src/renderer/src/store/terminals/terminal-tab-appearance.ts
 6 src/renderer/src/store/terminals/terminal-tab-close.ts
 10 src/renderer/src/store/terminals/terminal-tab-creation.ts
 7 src/renderer/src/store/terminals/terminal-tab-navigation.ts

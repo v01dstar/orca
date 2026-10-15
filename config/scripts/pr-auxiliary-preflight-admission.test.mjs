@@ -266,6 +266,7 @@ describe('Mobile CI tool preflight routing', () => {
       [tool, 'package.json'],
       [tool, 'config/vitest.config.ts'],
       [tool, 'config/scripts/pr-code-change-scope.mjs'],
+      [tool, 'config/scripts/pr-package-test-paths.mjs'],
       [tool, 'config/scripts/new-mobile-tool.mjs'],
       [tool, 'README.md'],
       [tool, 'mobile/vitest.config.ts']
@@ -301,6 +302,7 @@ function createMobileCiScopeRepository(
   for (const file of [
     'package.json',
     'config/scripts/pr-code-change-scope.mjs',
+    'config/scripts/pr-package-test-paths.mjs',
     'config/scripts/pr-layout-oracle-route.mjs',
     'config/scripts/git-pull-request-diff-base.mjs',
     'config/scripts/pr-e2e-source-routing.mjs',

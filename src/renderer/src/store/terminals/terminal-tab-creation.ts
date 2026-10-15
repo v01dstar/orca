@@ -3,7 +3,7 @@ import { clearWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { isValidHostTerminalTabId } from '../../../../shared/terminal-tab-id'
 import { getNextTerminalOrdinal } from '../../../../shared/workspace-layout/terminal-tab-ordinal'
-import { emptyLayoutSnapshot, singlePaneLayoutSnapshot } from '../slices/terminal-helpers'
+import { singlePaneLayoutSnapshot } from '../slices/terminal-helpers'
 import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
 import {
   buildOrphanTerminalCleanupPatch,
@@ -52,32 +52,26 @@ export function createTerminalTabCreationActions(
         const existing = (s.tabsByWorktree[worktreeId] ?? []).filter(
           (entry) => !orphanTerminalIds.has(entry.id)
         )
-        // Why: honor a caller-supplied tab id but mint on collision — aliasing two PTYs to one id corrupts agent-status routing. See docs/cli-terminal-hook-pane-key.md.
         // Why: only honor a non-empty trimmed hint; useIpcEvents spreads `id` whenever tabId !== undefined, so a stray '' would break paneKey routing.
         const trimmedHint = typeof options?.id === 'string' ? options.id.trim() : ''
         const hintedId =
           trimmedHint.length > 0 && isValidHostTerminalTabId(trimmedHint) ? trimmedHint : undefined
-        const idCollides =
+        // Why: the caller's PTY routes agent status by this id, so a fresh id would orphan it and aliasing would corrupt another tab's.
+        if (
           hintedId !== undefined &&
           Object.values(s.tabsByWorktree).some((tabs) =>
             tabs.some((entry) => entry.id === hintedId)
           )
-        if (idCollides) {
-          console.warn(
-            `[createTab] tabId hint ${hintedId} already exists; minting a fresh id (hook attribution will degrade for this terminal)`
-          )
+        ) {
+          throw new Error(`Terminal tab ${hintedId} already exists`)
         }
-        const id = hintedId !== undefined && !idCollides ? hintedId : createBrowserUuid()
+        const id = hintedId ?? createBrowserUuid()
         const requestedInitialLeafId =
           options?.initialLeafId && isTerminalLeafId(options.initialLeafId)
             ? options.initialLeafId
             : undefined
-        // Why: startup delivery is pane-owned; pin its first leaf so an aborted/remounted renderer retries against the same spawn reservation.
-        // Why a bare leaf id too: a host launch lays out its pane before the process it attaches to exists.
-        const initialLeafId =
-          options?.initialPtyId || options?.pendingStartup || requestedInitialLeafId
-            ? (requestedInitialLeafId ?? createBrowserUuid())
-            : undefined
+        // Why: name the first pane at creation so the saved layout is never empty; the pane mounts and spawns into this leaf.
+        const initialLeafId = requestedInitialLeafId ?? createBrowserUuid()
         const shouldActivate = options?.activate !== false
         const nextOrdinal = getNextTerminalOrdinal(existing)
         const defaultTitle = `Terminal ${nextOrdinal}`
@@ -263,9 +257,7 @@ export function createTerminalTabCreationActions(
             : orphanCleanupPatch.automaticAgentResumeClaimsByTabId,
           terminalLayoutsByTabId: {
             ...orphanCleanupPatch.terminalLayoutsByTabId,
-            [tab.id]: initialLeafId
-              ? singlePaneLayoutSnapshot(initialLeafId, options?.initialPtyId)
-              : emptyLayoutSnapshot()
+            [tab.id]: singlePaneLayoutSnapshot(initialLeafId, options?.initialPtyId)
           }
         }
       })

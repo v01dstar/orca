@@ -199,7 +199,9 @@ function PickerOption({
       ) : null}
       <span className="min-w-0 flex-1">
         <span className="flex min-w-0 items-baseline gap-1.5">
-          <span className="min-w-0 truncate font-mono font-medium">{item.token}</span>
+          <span className="min-w-0 truncate font-mono text-chat-code font-medium">
+            {item.token}
+          </span>
           {item.kind === 'command' && item.argumentHint ? (
             <span className="min-w-0 truncate font-mono text-2xs text-muted-foreground">
               {item.argumentHint}

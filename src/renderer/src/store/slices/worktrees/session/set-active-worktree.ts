@@ -1,8 +1,5 @@
 import type { WorktreeSlice } from '../../worktree-helpers'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
-import type { AppState } from '../../../types'
-import type { WorktreeMeta } from '../../../../../../shared/worktree/meta-types'
-import { applyWorktreeUpdates } from '../../worktree-helpers'
 import { projectWorktreeTabModelReconciliation } from '../../tabs'
 import { moveFocusToRendererBeforeFocusedWebviewHidden } from '../../browser-webview-cleanup'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
@@ -18,11 +15,7 @@ import {
   parseWorkspaceKey,
   worktreeWorkspaceKey
 } from '../../../../../../shared/workspace-scope'
-import {
-  applyDetectedWorktreeUpdates,
-  findKnownWorktreeById
-} from '../listing/detected-worktree-meta'
-import { persistPassiveWorktreeMetaForOwner } from '../listing/worktree-owner-settings'
+import { findKnownWorktreeById } from '../listing/detected-worktree-meta'
 import { resolveActivatedWorktreeSurface } from './active-worktree-surface'
 import { clearWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import {
@@ -53,13 +46,10 @@ export function createSetActiveWorktree(
     if (get().activeWorktreeId !== worktreeId) {
       moveFocusToRendererBeforeFocusedWebviewHidden()
     }
-    let shouldClearUnread = false
     let shouldPrepareTerminalTabs = false
     let shouldTagTerminalTabs = false
     set((current) => {
-      const transitioned = stateTransition
-        ? ({ ...current, ...stateTransition.patch } as AppState)
-        : current
+      const transitioned = stateTransition ? { ...current, ...stateTransition.patch } : current
       const reconciliation = worktreeId
         ? projectWorktreeTabModelReconciliation(transitioned, worktreeId)
         : null
@@ -68,7 +58,7 @@ export function createSetActiveWorktree(
       )
       const s =
         reconciliation && reconciliationChanged
-          ? ({ ...transitioned, ...reconciliation.patch } as AppState)
+          ? { ...transitioned, ...reconciliation.patch }
           : transitioned
       const reconciledActiveTabId = reconciliation?.activeRenderableTabId ?? null
       if (!worktreeId) {
@@ -83,7 +73,6 @@ export function createSetActiveWorktree(
       }
 
       const worktree = findKnownWorktreeById(s, worktreeId, executionHostId)
-      shouldClearUnread = Boolean(worktree?.isUnread)
       const {
         restoredRightSidebarExplorerView,
         activeFileId,
@@ -96,9 +85,6 @@ export function createSetActiveWorktree(
         stateTransition?.preferredActiveUnifiedTabId,
         reconciledActiveTabId
       )
-
-      // Why: focus isn't smart-sort activity — writing lastActivityAt here caused the "jump after focus" bug; only clear unread.
-      const metaUpdates: Partial<WorktreeMeta> = shouldClearUnread ? { isUnread: false } : {}
 
       // Why: prep is deferred (shell render deferred below) so it waits for input quiet instead of blocking the click.
       // Why first-activation guard, not tab.ptyId==null: reconnectPersistedTerminals repopulates ptyId before mount.
@@ -120,20 +106,6 @@ export function createSetActiveWorktree(
       const nextEverActivated = isFirstActivation
         ? new Set([...s.everActivatedWorktreeIds, worktreeId!])
         : s.everActivatedWorktreeIds
-      const nextWorktrees = shouldClearUnread
-        ? applyWorktreeUpdates(s.worktreesByRepo, worktreeId, metaUpdates)
-        : s.worktreesByRepo
-      const nextDetectedWorktrees = shouldClearUnread
-        ? applyDetectedWorktreeUpdates(s.detectedWorktreesByRepo, worktreeId, metaUpdates)
-        : s.detectedWorktreesByRepo
-      const nextFolderWorkspaces =
-        shouldClearUnread && workspaceScope?.type === 'folder'
-          ? s.folderWorkspaces.map((workspace) =>
-              workspace.id === workspaceScope.folderWorkspaceId
-                ? { ...workspace, isUnread: false }
-                : workspace
-            )
-          : s.folderWorkspaces
       const nextActiveRepoId =
         workspaceScope?.type === 'folder'
           ? null
@@ -176,10 +148,8 @@ export function createSetActiveWorktree(
         s.activeTabId !== activeTabId ||
         nextActiveTabTypeByWorktree !== s.activeTabTypeByWorktree ||
         nextEverActivated !== s.everActivatedWorktreeIds ||
-        nextWorktrees !== s.worktreesByRepo ||
-        nextDetectedWorktrees !== s.detectedWorktreesByRepo ||
-        nextFolderWorkspaces !== s.folderWorkspaces ||
         nextActiveRepoId !== s.activeRepoId ||
+        allDead ||
         reconciliationChanged ||
         stateTransition !== undefined
       if (!hasStateChange) {
@@ -204,13 +174,6 @@ export function createSetActiveWorktree(
         rightSidebarExplorerView: restoredRightSidebarExplorerView,
         activeTabId,
         everActivatedWorktreeIds: nextEverActivated,
-        ...(nextWorktrees !== s.worktreesByRepo ? { worktreesByRepo: nextWorktrees } : {}),
-        ...(nextDetectedWorktrees !== s.detectedWorktreesByRepo
-          ? { detectedWorktreesByRepo: nextDetectedWorktrees }
-          : {}),
-        ...(nextFolderWorkspaces !== s.folderWorkspaces
-          ? { folderWorkspaces: nextFolderWorkspaces }
-          : {}),
         ...tabsByWorktreeUpdate
       }
     })
@@ -275,26 +238,10 @@ export function createSetActiveWorktree(
     }
 
     // Why: activation is explicit enough to revalidate PR state now; the coordinator still coalesces and rate-guards.
-    if (worktreeId) {
+    if (worktreeId && workspaceScope?.type !== 'folder') {
       get().refreshGitHubForWorktreeIfStale(worktreeId)
     }
 
-    if (!worktreeId || !get().getKnownWorktreeById(worktreeId, executionHostId)) {
-      return true
-    }
-
-    if (shouldClearUnread) {
-      if (workspaceScope?.type === 'folder') {
-        void get().updateFolderWorkspace(workspaceScope.folderWorkspaceId, { isUnread: false })
-        return true
-      }
-      persistPassiveWorktreeMetaForOwner(
-        get,
-        worktreeId,
-        { isUnread: false },
-        'persist worktree activation state'
-      )
-    }
     return true
   }
 }

@@ -1,7 +1,7 @@
 import { memo, useContext } from 'react'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import { cn } from '@/lib/utils'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
+import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import { MessageRow, type NativeChatDeliveryNotice } from './NativeChatMessageRow'
 import { NativeChatResolutionReceipt } from './NativeChatResolutionReceipt'
 import { NativeChatWorkingStatus } from './NativeChatWorkingStatus'

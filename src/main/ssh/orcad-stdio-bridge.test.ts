@@ -5,7 +5,7 @@ import type { Server } from 'node:net'
 import type { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { OrcadStdioBridgeUnavailableError } from './orcad-host-unavailable'
+import { OrcadStdioBridgeUnavailableError } from '../orcad/orcad-host-unavailable'
 import { checkOrcadStdioBridge, type OrcadStdioBridge } from './orcad-stdio-bridge'
 import {
   orcadPosixStdioBridgeCommand,

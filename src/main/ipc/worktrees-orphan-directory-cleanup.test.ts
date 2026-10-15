@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { lstat, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { lstat, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -87,7 +87,12 @@ vi.mock('../workspace-cleanup-removal-snapshot-prune', async () =>
 vi.mock('../runtime/worktree-teardown', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeTeardownModuleMock()
 )
-vi.mock('./pty', async () => (await import('./worktrees-test-module-mocks')).ptyModuleMock())
+vi.mock('./pty/provider/registry', async () =>
+  (await import('./worktrees-test-module-mocks')).ptyRegistryModuleMock()
+)
+vi.mock('./pty/provider/state-cleanup', async () =>
+  (await import('./worktrees-test-module-mocks')).ptyStateCleanupModuleMock()
+)
 
 // Why: every removal and listing reply now names the catalog it produced or scanned.
 const anyCatalogVersion = { epoch: expect.any(String), sequence: expect.any(Number) }
@@ -280,13 +285,13 @@ describe('registerWorktreeHandlers', () => {
     }
   })
 
-  it('prompts then force-removes an Orca-created unregistered leftover directory with no git marker', async () => {
+  it('refuses an Orca-created unregistered directory with no git marker, even forced, until the user removes it', async () => {
     const parentDir = await mkdtemp(join(tmpdir(), 'orca-ipc-leftover-'))
     const repoPath = join(parentDir, 'repo')
     const leftoverPath = join(parentDir, 'leftover')
     const worktreeId = `repo-1::${leftoverPath}`
     await mkdir(leftoverPath, { recursive: true })
-    await writeFile(join(leftoverPath, 'leftover.txt'), 'kept until force\n')
+    await writeFile(join(leftoverPath, 'notes.txt'), 'mine\n')
     store.getRepo.mockReturnValue({
       id: 'repo-1',
       path: repoPath,
@@ -307,30 +312,22 @@ describe('registerWorktreeHandlers', () => {
     })
 
     try {
-      await expect(handlers['worktrees:remove'](null, { worktreeId })).rejects.toThrow(
-        'Worktree is no longer registered with Git but its directory remains.'
-      )
-      await expect(lstat(leftoverPath)).resolves.toBeTruthy()
+      for (const force of [false, true]) {
+        await expect(handlers['worktrees:remove'](null, { worktreeId, force })).rejects.toThrow(
+          `Refusing to delete unregistered worktree path: ${leftoverPath}`
+        )
+      }
+      await expect(readFile(join(leftoverPath, 'notes.txt'), 'utf8')).resolves.toBe('mine\n')
+      expect(killAllProcessesForWorktreeMock).not.toHaveBeenCalled()
       expect(removeWorktreeMock).not.toHaveBeenCalled()
       expect(store.removeWorktreeMeta).not.toHaveBeenCalled()
 
-      await expect(
-        handlers['worktrees:remove'](null, { worktreeId, force: true })
-      ).resolves.toEqual({ catalogVersion: anyCatalogVersion })
-
-      await expect(lstat(leftoverPath)).rejects.toMatchObject({ code: 'ENOENT' })
-      expect(killAllProcessesForWorktreeMock).toHaveBeenCalledWith(
-        worktreeId,
-        expect.objectContaining({ requirePhysicalStop: true })
-      )
-      expect(runHookMock).not.toHaveBeenCalled()
-      expect(removeWorktreeMock).not.toHaveBeenCalled()
-      expect(runtimeStub.clearOptimisticReconcileToken).toHaveBeenCalledWith(worktreeId)
-      expect(store.removeWorktreeMeta).toHaveBeenCalledWith(worktreeId, 'local')
-      expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith(worktreeId)
-      expect(mainWindow.webContents.send).toHaveBeenCalledWith('worktrees:changed', {
-        repoId: 'repo-1'
+      await rm(leftoverPath, { recursive: true, force: true })
+      await expect(handlers['worktrees:remove'](null, { worktreeId })).resolves.toEqual({
+        catalogVersion: anyCatalogVersion
       })
+      expect(removeWorktreeMock).not.toHaveBeenCalled()
+      expect(store.removeWorktreeMeta).toHaveBeenCalledWith(worktreeId, 'local')
     } finally {
       await rm(parentDir, { recursive: true, force: true })
     }

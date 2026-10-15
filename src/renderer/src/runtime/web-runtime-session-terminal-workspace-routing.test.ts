@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import { createWebRuntimeSessionTerminal } from './web-runtime-session'
+import { createWebRuntimeSessionTerminal } from './web-runtime-terminal-creation'
 import { resetWebSessionCloseIntentForTests } from './web-session-close-intent'
 import {
   ENVIRONMENT_ID,
@@ -41,14 +41,22 @@ vi.mock('../store', () => ({
   }
 }))
 
-vi.mock('./web-session-tabs-sync', () => ({
-  acceptReplayedWebSessionTabsSnapshot: mocks.acceptReplayedWebSessionTabsSnapshot,
-  applyWebSessionTabsSnapshot: mocks.applyWebSessionTabsSnapshot,
-  decideWebSessionTabsSnapshot: mocks.decideWebSessionTabsSnapshot,
+vi.mock('./web-session-tabs-sync/tracking-lifecycle', () => ({
+  acceptReplayedWebSessionTabsSnapshot: mocks.acceptReplayedWebSessionTabsSnapshot
+}))
+vi.mock('./web-session-tabs-sync/snapshot-api', () => ({
+  applyWebSessionTabsSnapshot: mocks.applyWebSessionTabsSnapshot
+}))
+vi.mock('./web-session-tabs-sync/tracking-decisions', () => ({
+  decideWebSessionTabsSnapshot: mocks.decideWebSessionTabsSnapshot
+}))
+vi.mock('./web-session-tabs-sync/store-patch', () => ({
   applyWebSessionTabsStorePatch: (buildPatch: (state: unknown) => unknown) => {
     mocks.setState(buildPatch)
     return () => {}
-  },
+  }
+}))
+vi.mock('./web-session-tabs-sync/tracking-mappings', () => ({
   resolveHostSessionTabIdForWebSessionTab: mocks.resolveHostSessionTabIdForWebSessionTab
 }))
 

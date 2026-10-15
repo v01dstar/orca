@@ -196,7 +196,7 @@ describe('SSH Windows consumers of qualified server slots', () => {
       ['arm64', 'preview']
     ])
     const addon = sshSteps.findIndex((step) =>
-      step.run?.includes('build-windows-process-tree-relay-addon.mjs')
+      step.run?.includes('build-windows-process-tree-addon.mjs')
     )
     const template = sshSteps.findIndex((step) => step.run?.includes('build-orcad-template.mjs'))
     const hosts = sshSteps.findIndex((step) => step.name?.startsWith('Run the Windows host cells'))
@@ -225,6 +225,7 @@ node() {
       IFS= read -r verdict < out/orcad-prebuilds/manifest.json
       [ "$verdict" = valid ] ;;
     *--print-slot) echo win32-x64 ;;
+    *--require-slots*|*--smoke) grep -qx valid out/orcad-prebuilds/manifest.json ;;
     *) return 41 ;;
   esac
 }
@@ -288,8 +289,8 @@ describe.skipIf(process.platform === 'win32')('Windows prebuild Bash fallback', 
     ).toBe(validates)
     expect(commands.slice(-3)).toEqual([
       'node config/scripts/build-orcad-prebuilds.mjs --print-slot',
-      'pnpm build:orcad-prebuilds --require-slots win32-x64',
-      'pnpm build:orcad-prebuilds --smoke'
+      'node config/scripts/build-orcad-prebuilds.mjs --require-slots win32-x64',
+      'node config/scripts/build-orcad-prebuilds.mjs --smoke'
     ])
   })
 

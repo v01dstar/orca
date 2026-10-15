@@ -3,22 +3,24 @@ import type {
   OrcadMigrationCatalogState,
   OrcadMigrationManifest
 } from '../../shared/orcad-migration-manifest'
+import type { OrcadMigrationBlobDescriptor } from '../../shared/orcad-migration-blob-transfer'
 import type { Store } from '../persistence'
 
-type OrcadMigrationCatalogFlushStore = Pick<Store, 'flushPendingOrThrowAsync'>
+type OrcadMigrationCatalogFlushStore = Partial<Pick<Store, 'flushPendingOrThrowAsync'>>
 type OrcadMigrationCatalogStageStore = OrcadMigrationCatalogFlushStore &
-  Pick<Store, 'stageOrcadMigrationCatalog'>
+  Partial<Pick<Store, 'stageOrcadMigrationCatalog'>>
 type OrcadMigrationCatalogCommitStore = OrcadMigrationCatalogFlushStore &
-  Pick<Store, 'commitStagedOrcadMigrationCatalog'>
+  Partial<Pick<Store, 'commitStagedOrcadMigrationCatalog' | 'installOrcadMigrationReceivedBlobs'>>
 type OrcadMigrationCatalogAbortStore = OrcadMigrationCatalogFlushStore &
-  Pick<Store, 'abortStagedOrcadMigrationCatalog'>
+  Partial<Pick<Store, 'abortStagedOrcadMigrationCatalog'>>
 
 export async function stageOrcadMigrationCatalogDurably(args: {
   store: OrcadMigrationCatalogStageStore
   manifest: OrcadMigrationManifest
   signal?: AbortSignal
 }): Promise<OrcadMigrationCatalogState> {
-  const result = args.store.stageOrcadMigrationCatalog(args.manifest)
+  // SAFETY: Returned or mutable Store slots retain their original native missing-method failure.
+  const result = args.store.stageOrcadMigrationCatalog!(args.manifest)
   await flushMigrationState(args.store, args.signal)
   return result
 }
@@ -27,12 +29,31 @@ export async function commitStagedOrcadMigrationCatalogDurably(args: {
   store: OrcadMigrationCatalogCommitStore
   manifest: OrcadMigrationManifest
   signal?: AbortSignal
+  expectedBlobs?: readonly OrcadMigrationBlobDescriptor[]
   onDurableCommit: () => void
 }): Promise<OrcadMigrationCatalogState> {
-  const result = args.store.commitStagedOrcadMigrationCatalog(args.manifest)
+  // SAFETY: Returned or mutable Store slots retain their original native missing-method failure.
+  const result = args.store.commitStagedOrcadMigrationCatalog!(
+    args.manifest,
+    args.expectedBlobs ? { expectedBlobs: args.expectedBlobs } : {}
+  )
   await flushMigrationState(args.store, args.signal)
   args.onDurableCommit()
+  installReceivedBlobs(args.store, args.manifest)
   return result
+}
+
+/** After the durable commit, on its retries and state queries; the store load retries too. */
+function installReceivedBlobs(
+  store: Partial<Pick<Store, 'installOrcadMigrationReceivedBlobs'>>,
+  manifest: OrcadMigrationManifest
+): void {
+  try {
+    store.installOrcadMigrationReceivedBlobs?.(manifest)
+  } catch (error) {
+    // The catalog is committed; a failed install keeps its blob for the next retry.
+    console.error('[orcad-migration] installing received blobs failed:', error)
+  }
 }
 
 export async function abortStagedOrcadMigrationCatalogDurably(args: {
@@ -40,7 +61,8 @@ export async function abortStagedOrcadMigrationCatalogDurably(args: {
   manifest: OrcadMigrationManifest
   signal?: AbortSignal
 }): Promise<OrcadMigrationCatalogAbortResult> {
-  const result = args.store.abortStagedOrcadMigrationCatalog(args.manifest)
+  // SAFETY: Returned or mutable Store slots retain their original native missing-method failure.
+  const result = args.store.abortStagedOrcadMigrationCatalog!(args.manifest)
   // An already-absent retry may follow an in-memory abort whose flush failed.
   if (result.state === 'absent') {
     await flushMigrationState(args.store, args.signal)
@@ -50,15 +72,26 @@ export async function abortStagedOrcadMigrationCatalogDurably(args: {
 }
 
 export function getOrcadMigrationCatalogState(args: {
-  store: Pick<Store, 'getOrcadMigrationCatalogState'>
+  store: Partial<
+    Pick<Store, 'getOrcadMigrationCatalogState' | 'installOrcadMigrationReceivedBlobs'>
+  >
   manifest: OrcadMigrationManifest
 }): OrcadMigrationCatalogState {
-  return args.store.getOrcadMigrationCatalogState(args.manifest)
+  // SAFETY: Returned or mutable Store slots retain their original native missing-method failure.
+  const result = args.store.getOrcadMigrationCatalogState!(args.manifest)
+  if (result.state === 'committed') {
+    installReceivedBlobs(args.store, args.manifest)
+  }
+  return result
 }
 
 function flushMigrationState(
   store: OrcadMigrationCatalogFlushStore,
   signal?: AbortSignal
 ): Promise<void> {
-  return store.flushPendingOrThrowAsync({ signal, drainToStableGeneration: false })
+  // SAFETY: Returned or mutable Store slots retain their original native missing-method failure.
+  return store.flushPendingOrThrowAsync!({
+    signal,
+    drainToStableGeneration: false
+  })
 }

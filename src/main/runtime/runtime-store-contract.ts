@@ -4,6 +4,7 @@ import type { VoiceSettings } from '../../shared/speech-types'
 
 export type RuntimeStore = {
   getRepos: Store['getRepos']
+  getSshTargets?: Store['getSshTargets']
   getRepo: Store['getRepo']
   addRepo: Store['addRepo']
   updateRepo: Store['updateRepo']
@@ -57,8 +58,12 @@ export type RuntimeStore = {
   stageOrcadMigrationCatalog?: Store['stageOrcadMigrationCatalog']
   commitStagedOrcadMigrationCatalog?: Store['commitStagedOrcadMigrationCatalog']
   stageOrcadMigrationSnapshotChunk?: Store['stageOrcadMigrationSnapshotChunk']
+  stageOrcadMigrationBlobChunk?: Store['stageOrcadMigrationBlobChunk']
   abortStagedOrcadMigrationCatalog?: Store['abortStagedOrcadMigrationCatalog']
   getOrcadMigrationCatalogState?: Store['getOrcadMigrationCatalogState']
+  installOrcadMigrationReceivedBlobs?: Store['installOrcadMigrationReceivedBlobs']
+  peekOrcadMigrationTerminalRestoreHint?: Store['peekOrcadMigrationTerminalRestoreHint']
+  consumeOrcadMigrationTerminalRestoreHint?: Store['consumeOrcadMigrationTerminalRestoreHint']
   persistPtyBinding?: Store['persistPtyBinding']
   admitTerminalPane?: Store['admitTerminalPane']
   withdrawTerminalPane?: Store['withdrawTerminalPane']
@@ -81,6 +86,7 @@ export type RuntimeStore = {
   getMobileClientTabSelections?: Store['getMobileClientTabSelections']
   setMobileClientTabSelections?: Store['setMobileClientTabSelections']
   getSettings(): {
+    nestedWorkerMaxDepth?: GlobalSettings['nestedWorkerMaxDepth']
     workspaceDir: string
     nestWorkspaces: boolean
     // Read by worktree placement: decides whether this project's worktrees
@@ -91,6 +97,8 @@ export type RuntimeStore = {
     branchPrefix: string
     branchPrefixCustom: string
     defaultTuiAgent?: GlobalSettings['defaultTuiAgent']
+    newWorkspaceSetupOnly?: GlobalSettings['newWorkspaceSetupOnly']
+    setupScriptLaunchMode?: GlobalSettings['setupScriptLaunchMode']
     disabledTuiAgents?: GlobalSettings['disabledTuiAgents']
     agentCmdOverrides?: GlobalSettings['agentCmdOverrides']
     agentDefaultArgs?: GlobalSettings['agentDefaultArgs']
@@ -133,6 +141,7 @@ export type RuntimeStore = {
     hostSettingOverrides?: GlobalSettings['hostSettingOverrides']
     agentSkillSharingEnabled?: GlobalSettings['agentSkillSharingEnabled']
     nativeChatSessionOptions?: GlobalSettings['nativeChatSessionOptions']
+    nativeChatPermissionMode?: GlobalSettings['nativeChatPermissionMode']
     nativeChatInlineVisuals?: GlobalSettings['nativeChatInlineVisuals']
     nativeChatInheritShellEnvironment?: GlobalSettings['nativeChatInheritShellEnvironment']
     nativeChatShellEnvironmentVariables?: GlobalSettings['nativeChatShellEnvironmentVariables']

@@ -132,6 +132,9 @@
   --color-status-success-background: var(--status-success-background);
   --color-status-success-border: var(--status-success-border);
   --color-status-warning: var(--status-warning);
+  --color-jira-priority-high: var(--jira-priority-high);
+  --color-jira-priority-medium: var(--jira-priority-medium);
+  --color-jira-priority-low: var(--jira-priority-low);
   --color-status-warning-background: var(--status-warning-background);
   --color-status-warning-border: var(--status-warning-border);
   --color-callout-note: var(--callout-note);
@@ -406,6 +409,9 @@
   --status-success-border: color-mix(in srgb, var(--status-success) 25%, transparent);
   /* Needs-attention states use yellow, separate from errors and working states. */
   --status-warning: #ca8a04;
+  --jira-priority-high: var(--destructive);
+  --jira-priority-medium: var(--status-warning);
+  --jira-priority-low: var(--callout-note);
   --status-warning-background: color-mix(in srgb, var(--status-warning) 10%, transparent);
   --status-warning-border: color-mix(in srgb, var(--status-warning) 25%, transparent);
   /* GitHub's own hues for the two callout kinds no status token covers. */
@@ -432,6 +438,9 @@
   --status-success-background: color-mix(in srgb, var(--status-success) 10%, transparent);
   --status-success-border: color-mix(in srgb, var(--status-success) 25%, transparent);
   --status-warning: #eab308;
+  --jira-priority-high: var(--destructive);
+  --jira-priority-medium: var(--status-warning);
+  --jira-priority-low: var(--callout-note);
   --status-warning-background: color-mix(in srgb, var(--status-warning) 10%, transparent);
   --status-warning-border: color-mix(in srgb, var(--status-warning) 25%, transparent);
   --callout-note: #4493f8;
@@ -481,7 +490,8 @@
 
 [data-sonner-toaster] {
   font-family: var(--font-sans);
-  z-index: var(--toaster-z-index, 40) !important;
+  /* Why: above the floating workspace (z-45 panel, z-46 launcher), which parks in the toasts' corner. */
+  z-index: var(--toaster-z-index, 47) !important;
 }
 
 /* Keep errors above standard modal backdrops at the existing popover tier.

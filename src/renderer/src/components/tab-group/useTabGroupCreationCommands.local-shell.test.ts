@@ -21,7 +21,9 @@ const mocks = vi.hoisted(() => ({
 vi.mock('react', async () => await stubHeadlessReact())
 
 vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getRuntimeEnvironmentIdForWorktree: mocks.getRuntimeEnvironmentIdForWorktree,
+  getRuntimeEnvironmentIdForWorktree: mocks.getRuntimeEnvironmentIdForWorktree
+}))
+vi.mock('@/lib/runtime-session-mirror-owners', () => ({
   getRuntimeSessionMirrorEnvironmentIds: () => []
 }))
 
