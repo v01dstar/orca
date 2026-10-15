@@ -237,8 +237,11 @@ export function RuntimeEnvironmentsPane({
         onRemove={openRemoveDialog}
       />
 
+      <div className={cn('space-y-5 pt-2', visibleWorkflow !== 'instabox' && 'hidden')}>
+        <InstaboxMachinesSection active={visibleWorkflow === 'instabox'} />
+      </div>
+
       <div className={cn('space-y-5 pt-2', visibleWorkflow !== 'cloud-vm' && 'hidden')}>
-        <InstaboxMachinesSection active={visibleWorkflow === 'cloud-vm'} />
         <CloudVmSetupGuide />
         <EphemeralVmRuntimesSection active={visibleWorkflow === 'cloud-vm'} />
       </div>

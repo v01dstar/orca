@@ -5,7 +5,8 @@ import { Button } from '../ui/button'
 import { RuntimePairingUrlGenerator } from './RuntimePairingUrlGenerator'
 import { MachineNameField } from './MachineNameField'
 
-export type RemoteServerWorkflow = 'connect' | 'cloud-vm' | 'share'
+// Fork: 'instabox' is its own tab, apart from Orca's recipe-based Cloud VM.
+export type RemoteServerWorkflow = 'connect' | 'cloud-vm' | 'instabox' | 'share'
 
 export function RuntimeServerWorkflowPicker({
   canGeneratePairingUrl,
@@ -25,7 +26,7 @@ export function RuntimeServerWorkflowPicker({
         'auto.components.settings.RuntimeEnvironmentsPane.workflow',
         'Remote server workflow'
       )}
-      className={cn('grid gap-2 sm:grid-cols-2', canGeneratePairingUrl && 'sm:grid-cols-3')}
+      className={cn('grid gap-2 sm:grid-cols-2', !canGeneratePairingUrl && 'sm:grid-cols-3')}
     >
       {(
         [
@@ -60,6 +61,17 @@ export function RuntimeServerWorkflowPicker({
             translate(
               'auto.components.settings.RuntimeEnvironmentsPane.cloudVmWorkflowHelp',
               'Manage recipe-created cloud machines'
+            )
+          ],
+          [
+            'instabox',
+            translate(
+              'auto.components.settings.RuntimeEnvironmentsPane.instaboxWorkflow',
+              'Instabox'
+            ),
+            translate(
+              'auto.components.settings.RuntimeEnvironmentsPane.instaboxWorkflowHelp',
+              'Create and manage your Instabox machines'
             )
           ]
         ] as const
